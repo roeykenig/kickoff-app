@@ -1,13 +1,13 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/SupabaseAuthContext';
 import Navbar from './components/Navbar';
-import Home from './pages/Home';
-import LobbyDetail from './pages/LobbyDetail';
-import CreateLobby from './pages/CreateLobby';
-import Register from './pages/Register';
-import Login from './pages/Login';
-import Profile from './pages/Profile';
+import Home from './pages/HomeLive';
+import LobbyDetail from './pages/LobbyDetailLive';
+import CreateLobby from './pages/CreateLobbyLive';
+import Register from './pages/RegisterLive';
+import Login from './pages/LoginLive';
+import Profile from './pages/ProfileLive';
 
 export default function App() {
   return (

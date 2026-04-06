@@ -1,4 +1,5 @@
 export type Language = 'he' | 'en';
+export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'mixed';
 
 export interface RatingEntry {
   date: string;
@@ -56,7 +57,7 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
   initials: string;
   avatarColor: string;
   rating: number;
