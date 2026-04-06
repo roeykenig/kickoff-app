@@ -4,8 +4,8 @@ import { AuthProvider } from './contexts/SupabaseAuthContext';
 import Navbar from './components/Navbar';
 import Home from './pages/HomeLive';
 import LobbyDetail from './pages/LobbyDetailLive';
-import CreateLobby from './pages/CreateLobbyLive';
-import Register from './pages/RegisterLive';
+import CreateLobby from './pages/CreateLobbyPage';
+import Register from './pages/RegisterPage';
 import Login from './pages/LoginLive';
 import Profile from './pages/ProfileLive';
 

@@ -5,6 +5,7 @@ import RatingDisplay, { RatingBadge } from '../components/RatingDisplay';
 import { useLang } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/SupabaseAuthContext';
 import { deleteLobbyMembership, fetchLobbyById, upsertLobbyMembership } from '../lib/appData';
+import { getJoinLobbyError } from '../lib/validation';
 import type { Lobby } from '../types';
 import { formatDateTime } from '../utils/format';
 
@@ -70,12 +71,13 @@ export default function LobbyDetailLive() {
     );
   }
 
-  const lobbyId = lobby.id;
+  const resolvedLobby = lobby;
+  const lobbyId = resolvedLobby.id;
 
-  const isFull = lobby.players.length >= lobby.maxPlayers;
-  const dateStr = formatDateTime(lobby.datetime, lang, t.common.today, t.common.tomorrow);
-  const avg = avgRating(lobby.players);
-  const myWaitlistIndex = currentUser ? lobby.waitlist.findIndex((player) => player.id === currentUser.id) : -1;
+  const isFull = resolvedLobby.players.length >= resolvedLobby.maxPlayers;
+  const dateStr = formatDateTime(resolvedLobby.datetime, lang, t.common.today, t.common.tomorrow);
+  const avg = avgRating(resolvedLobby.players);
+  const myWaitlistIndex = currentUser ? resolvedLobby.waitlist.findIndex((player) => player.id === currentUser.id) : -1;
   const isFirstWaitlisted = myWaitlistIndex === 0;
 
   const myStatus: MyStatus = (() => {
@@ -107,6 +109,12 @@ export default function LobbyDetailLive() {
   function handleJoin() {
     if (!currentUser) {
       navigate('/login');
+      return;
+    }
+
+    const joinError = getJoinLobbyError(resolvedLobby, currentUser);
+    if (joinError) {
+      setError(joinError);
       return;
     }
 

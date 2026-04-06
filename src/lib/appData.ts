@@ -1,5 +1,6 @@
 import type { Lobby, Player, RatingEntry, LobbyHistoryEntry } from '../types';
 import { requireSupabase } from './supabase';
+import { getJoinLobbyError, normalizeText, validateCreateLobbyPayload } from './validation';
 
 type ProfileRow = {
   id: string;
@@ -177,15 +178,32 @@ export type CreateLobbyInput = {
 };
 
 export async function createLobby(input: CreateLobbyInput): Promise<string> {
+  const draftErrors = validateCreateLobbyPayload({
+    title: input.title,
+    fieldName: input.fieldName,
+    address: input.address,
+    city: input.city,
+    datetime: input.datetime,
+    numTeams: input.numTeams ?? 0,
+    playersPerTeam: input.playersPerTeam ?? 0,
+    minRating: input.minRating ?? 1,
+    price: input.price,
+    description: input.description,
+  });
+
+  if (draftErrors.length > 0) {
+    throw new Error(draftErrors[0]);
+  }
+
   const supabase = requireSupabase();
   const id = `lobby_${crypto.randomUUID()}`;
 
   const { error: lobbyError } = await supabase.from('lobbies').insert({
     id,
-    title: input.title,
-    field_name: input.fieldName,
-    address: input.address,
-    city: input.city,
+    title: normalizeText(input.title),
+    field_name: normalizeText(input.fieldName),
+    address: normalizeText(input.address),
+    city: normalizeText(input.city),
     datetime: input.datetime,
     max_players: input.maxPlayers,
     num_teams: input.numTeams ?? null,
@@ -193,7 +211,7 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
     min_rating: input.minRating ?? null,
     is_private: false,
     price: input.price ?? null,
-    description: input.description ?? null,
+    description: input.description ? normalizeText(input.description) : null,
     created_by: input.createdBy,
     distance_km: 0,
   });
@@ -217,6 +235,31 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
 
 export async function upsertLobbyMembership(lobbyId: string, profileId: string, status: MembershipRow['status']) {
   const supabase = requireSupabase();
+
+  if (status === 'joined' || status === 'waitlisted') {
+    const [lobby, profile] = await Promise.all([fetchLobbyById(lobbyId), fetchProfileById(profileId)]);
+    const resolvedLobby = lobby;
+    const joinError =
+      resolvedLobby && profile
+        ? getJoinLobbyError(resolvedLobby, profile, { allowExistingWaitlist: status === 'joined' })
+        : 'Failed to resolve player or game.';
+
+    if (joinError) {
+      throw new Error(joinError);
+    }
+
+    if (!resolvedLobby || !profile) {
+      throw new Error('Failed to resolve player or game.');
+    }
+
+    if (status === 'joined') {
+      const joinedCount = resolvedLobby.players.length;
+      if (joinedCount >= resolvedLobby.maxPlayers) {
+        throw new Error('This game is full right now.');
+      }
+    }
+  }
+
   const { error } = await supabase.from('lobby_memberships').upsert(
     {
       lobby_id: lobbyId,

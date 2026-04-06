@@ -60,6 +60,50 @@ create table if not exists public.friend_requests (
   check (from_profile_id <> to_profile_id)
 );
 
+alter table public.profiles drop constraint if exists profiles_email_lowercase_check;
+alter table public.profiles add constraint profiles_email_lowercase_check check (email is null or email = lower(email));
+alter table public.profiles drop constraint if exists profiles_name_length_check;
+alter table public.profiles add constraint profiles_name_length_check check (char_length(trim(name)) between 2 and 80);
+alter table public.profiles drop constraint if exists profiles_initials_length_check;
+alter table public.profiles add constraint profiles_initials_length_check check (char_length(trim(initials)) between 1 and 4);
+alter table public.profiles drop constraint if exists profiles_rating_range_check;
+alter table public.profiles add constraint profiles_rating_range_check check (rating between 1.0 and 10.0);
+alter table public.profiles drop constraint if exists profiles_games_played_non_negative_check;
+alter table public.profiles add constraint profiles_games_played_non_negative_check check (games_played >= 0);
+alter table public.profiles drop constraint if exists profiles_bio_length_check;
+alter table public.profiles add constraint profiles_bio_length_check check (bio is null or char_length(bio) <= 280);
+
+alter table public.lobbies drop constraint if exists lobbies_title_length_check;
+alter table public.lobbies add constraint lobbies_title_length_check check (char_length(trim(title)) between 3 and 80);
+alter table public.lobbies drop constraint if exists lobbies_field_name_length_check;
+alter table public.lobbies add constraint lobbies_field_name_length_check check (char_length(trim(field_name)) between 2 and 80);
+alter table public.lobbies drop constraint if exists lobbies_address_length_check;
+alter table public.lobbies add constraint lobbies_address_length_check check (char_length(trim(address)) between 5 and 120);
+alter table public.lobbies drop constraint if exists lobbies_city_length_check;
+alter table public.lobbies add constraint lobbies_city_length_check check (char_length(trim(city)) between 2 and 60);
+alter table public.lobbies drop constraint if exists lobbies_max_players_range_check;
+alter table public.lobbies add constraint lobbies_max_players_range_check check (max_players between 6 and 44);
+alter table public.lobbies drop constraint if exists lobbies_num_teams_range_check;
+alter table public.lobbies add constraint lobbies_num_teams_range_check check (num_teams is null or num_teams between 2 and 4);
+alter table public.lobbies drop constraint if exists lobbies_players_per_team_range_check;
+alter table public.lobbies add constraint lobbies_players_per_team_range_check check (players_per_team is null or players_per_team between 3 and 11);
+alter table public.lobbies drop constraint if exists lobbies_min_rating_range_check;
+alter table public.lobbies add constraint lobbies_min_rating_range_check check (min_rating is null or min_rating between 1.0 and 10.0);
+alter table public.lobbies drop constraint if exists lobbies_price_range_check;
+alter table public.lobbies add constraint lobbies_price_range_check check (price is null or price between 0 and 999);
+alter table public.lobbies drop constraint if exists lobbies_description_length_check;
+alter table public.lobbies add constraint lobbies_description_length_check check (description is null or char_length(description) <= 500);
+alter table public.lobbies drop constraint if exists lobbies_team_math_check;
+alter table public.lobbies add constraint lobbies_team_math_check check (
+  (num_teams is null and players_per_team is null)
+  or (num_teams is not null and players_per_team is not null and max_players = num_teams * players_per_team)
+);
+
+create index if not exists profiles_auth_user_id_idx on public.profiles (auth_user_id);
+create index if not exists lobbies_datetime_idx on public.lobbies (datetime);
+create index if not exists lobby_memberships_profile_id_idx on public.lobby_memberships (profile_id);
+create index if not exists friend_requests_to_profile_status_idx on public.friend_requests (to_profile_id, status);
+
 alter table public.profiles enable row level security;
 alter table public.lobbies enable row level security;
 alter table public.lobby_memberships enable row level security;

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { AuthUser, LobbyHistoryEntry, RatingEntry } from '../types';
 import { requireSupabase } from '../lib/supabase';
 import { uploadAvatar } from '../lib/storage';
+import { normalizeText, validateRegisterDraft } from '../lib/validation';
 
 type ProfileRow = {
   id: string;
@@ -168,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [supabase]);
 
   const login = async (email: string, password: string): Promise<string | null> => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (error) {
       return error.message;
     }
@@ -179,8 +180,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: RegisterInput): Promise<string | null> => {
-    const { data: signUpData, error } = await supabase.auth.signUp({
+    const validationErrors = validateRegisterDraft({
+      name: data.name,
       email: data.email,
+      password: data.password ?? '',
+      bio: data.bio,
+      photoFile: data.photoFile ?? null,
+    });
+
+    if (validationErrors.length > 0) {
+      return validationErrors[0];
+    }
+
+    const { data: signUpData, error } = await supabase.auth.signUp({
+      email: data.email.trim().toLowerCase(),
       password: data.password ?? '',
     });
 
@@ -206,14 +219,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error: profileError } = await supabase.from('profiles').insert({
       id: authUser.id,
       auth_user_id: authUser.id,
-      email: data.email,
-      name: data.name,
+      email: data.email.trim().toLowerCase(),
+      name: normalizeText(data.name),
       initials: data.initials,
       avatar_color: data.avatarColor,
       rating: 5,
       games_played: 0,
-      position: data.position ?? null,
-      bio: data.bio ?? null,
+      position: data.position ? normalizeText(data.position) : null,
+      bio: data.bio ? normalizeText(data.bio) : null,
       photo_url: photoUrl,
       rating_history: [],
       lobby_history: [],
