@@ -4,6 +4,7 @@ import { createLobby } from '../lib/appData';
 import { useAuth } from '../contexts/SupabaseAuthContext';
 import { useLang } from '../contexts/LanguageContext';
 import { buildLobbyDateTime, validateCreateLobbyDraft } from '../lib/validation';
+import type { GameType } from '../types';
 
 const TEAM_OPTIONS = [2, 3, 4];
 
@@ -11,6 +12,7 @@ export default function CreateLobbyPage() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { t, lang } = useLang();
+  const [gameType, setGameType] = useState<GameType>('friendly');
   const [form, setForm] = useState({
     title: '',
     fieldName: '',
@@ -46,7 +48,7 @@ export default function CreateLobbyPage() {
     setError('');
 
     const numericPrice = form.price ? Number(form.price) : undefined;
-    const minRating = Number(form.minRating);
+    const minRating = gameType === 'competitive' ? Number(form.minRating) : undefined;
     const validationErrors = validateCreateLobbyDraft({
       title: form.title,
       fieldName: form.fieldName,
@@ -82,6 +84,7 @@ export default function CreateLobbyPage() {
         price: numericPrice,
         description: form.description || undefined,
         createdBy: currentUserId,
+        gameType,
       });
 
       navigate(`/lobby/${lobbyId}`);
@@ -99,6 +102,43 @@ export default function CreateLobbyPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <Card>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {lang === 'he' ? 'סוג משחק' : 'Game type'}
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setGameType('friendly')}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
+                  gameType === 'friendly'
+                    ? 'bg-green-500 text-white border-green-500'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-green-300'
+                }`}
+              >
+                {lang === 'he' ? '⚽ ידידותי' : '⚽ Friendly'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGameType('competitive')}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all border ${
+                  gameType === 'competitive'
+                    ? 'bg-primary-600 text-white border-primary-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'
+                }`}
+              >
+                {lang === 'he' ? '🏆 תחרותי' : '🏆 Competitive'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              {gameType === 'friendly'
+                ? (lang === 'he' ? 'משחק ידידותי — ללא השפעה על דירוג' : 'Friendly game — no effect on ratings')
+                : (lang === 'he' ? 'משחק תחרותי — שחקנים מדרגים אחד את השני בסיום' : 'Competitive — players rate each other anonymously after the game')}
+            </p>
+          </div>
+        </Card>
+
         <Card>
           <Field label={lang === 'he' ? 'שם המשחק / הלובי' : 'Game / Lobby name'}>
             <Input
@@ -183,17 +223,19 @@ export default function CreateLobbyPage() {
         </Card>
 
         <Card>
-          <Field label={lang === 'he' ? `דירוג מינימלי: ★ ${Number(form.minRating).toFixed(1)}` : `Min rating: ★ ${Number(form.minRating).toFixed(1)}`}>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              step="0.5"
-              value={form.minRating}
-              onChange={setField('minRating')}
-              className="w-full accent-primary-600 mt-1"
-            />
-          </Field>
+          {gameType === 'competitive' && (
+            <Field label={lang === 'he' ? `דירוג מינימלי: ★ ${Number(form.minRating).toFixed(1)}` : `Min rating: ★ ${Number(form.minRating).toFixed(1)}`}>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                step="0.5"
+                value={form.minRating}
+                onChange={setField('minRating')}
+                className="w-full accent-primary-600 mt-1"
+              />
+            </Field>
+          )}
           <Field label={t.create.price}>
             <Input type="number" min="0" value={form.price} onChange={setField('price')} placeholder={t.create.pricePlaceholder} />
           </Field>

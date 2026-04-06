@@ -1,4 +1,4 @@
-import type { Lobby, Player, RatingEntry, LobbyHistoryEntry } from '../types';
+import type { Lobby, Player, RatingEntry, LobbyHistoryEntry, GameType } from '../types';
 import { requireSupabase } from './supabase';
 import { getJoinLobbyError, normalizeText, validateCreateLobbyPayload } from './validation';
 
@@ -33,6 +33,7 @@ type LobbyRow = {
   description: string | null;
   created_by: string;
   distance_km: number;
+  game_type: GameType;
 };
 
 type MembershipRow = {
@@ -94,7 +95,7 @@ export async function fetchLobbies(): Promise<Lobby[]> {
   const [{ data: lobbyRows, error: lobbiesError }, { data: profileRows, error: profilesError }, { data: membershipRows, error: membershipsError }] = await Promise.all([
     supabase
       .from('lobbies')
-      .select('id, title, field_name, address, city, datetime, max_players, num_teams, players_per_team, min_rating, is_private, price, description, created_by, distance_km')
+      .select('id, title, field_name, address, city, datetime, max_players, num_teams, players_per_team, min_rating, is_private, price, description, created_by, distance_km, game_type')
       .order('datetime', { ascending: true }),
     supabase
       .from('profiles')
@@ -153,6 +154,7 @@ export async function fetchLobbies(): Promise<Lobby[]> {
       createdBy: row.created_by,
       distanceKm: row.distance_km,
       waitlist,
+      gameType: row.game_type ?? 'friendly',
     };
   });
 }
@@ -175,6 +177,7 @@ export type CreateLobbyInput = {
   price?: number;
   description?: string;
   createdBy: string;
+  gameType: GameType;
 };
 
 export async function createLobby(input: CreateLobbyInput): Promise<string> {
@@ -186,7 +189,7 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
     datetime: input.datetime,
     numTeams: input.numTeams ?? 0,
     playersPerTeam: input.playersPerTeam ?? 0,
-    minRating: input.minRating ?? 1,
+    minRating: input.gameType === 'competitive' ? input.minRating : undefined,
     price: input.price,
     description: input.description,
   });
@@ -208,12 +211,13 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
     max_players: input.maxPlayers,
     num_teams: input.numTeams ?? null,
     players_per_team: input.playersPerTeam ?? null,
-    min_rating: input.minRating ?? null,
+    min_rating: input.gameType === 'competitive' ? (input.minRating ?? null) : null,
     is_private: false,
     price: input.price ?? null,
     description: input.description ? normalizeText(input.description) : null,
     created_by: input.createdBy,
     distance_km: 0,
+    game_type: input.gameType,
   });
 
   if (lobbyError) {
@@ -285,4 +289,51 @@ export async function deleteLobbyMembership(lobbyId: string, profileId: string) 
   if (error) {
     throw error;
   }
+}
+
+export type PlayerRatingInput = {
+  ratedProfileId: string;
+  rating: number;
+};
+
+export type LobbyRatingSubmission = {
+  lobbyId: string;
+  raterProfileId: string;
+  playerRatings: PlayerRatingInput[];
+  fieldRating: number;
+  gameLevel: 'beginner' | 'intermediate' | 'advanced';
+};
+
+export async function submitLobbyRatings(input: LobbyRatingSubmission) {
+  const supabase = requireSupabase();
+
+  const rows = input.playerRatings.map((pr) => ({
+    lobby_id: input.lobbyId,
+    rater_profile_id: input.raterProfileId,
+    rated_profile_id: pr.ratedProfileId,
+    rating: pr.rating,
+    field_rating: input.fieldRating,
+    game_level: input.gameLevel,
+  }));
+
+  const { error } = await supabase.from('lobby_ratings').insert(rows);
+  if (error) {
+    throw error;
+  }
+}
+
+export async function hasAlreadyRated(lobbyId: string, raterProfileId: string): Promise<boolean> {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from('lobby_ratings')
+    .select('id')
+    .eq('lobby_id', lobbyId)
+    .eq('rater_profile_id', raterProfileId)
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).length > 0;
 }

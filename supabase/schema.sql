@@ -38,6 +38,7 @@ create table if not exists public.lobbies (
   description text,
   created_by text not null references public.profiles (id) on delete restrict,
   distance_km numeric(5, 1) not null default 0,
+  game_type text not null default 'friendly' check (game_type in ('friendly', 'competitive')),
   created_at timestamptz not null default now()
 );
 
@@ -99,15 +100,31 @@ alter table public.lobbies add constraint lobbies_team_math_check check (
   or (num_teams is not null and players_per_team is not null and max_players = num_teams * players_per_team)
 );
 
+create table if not exists public.lobby_ratings (
+  id uuid primary key default gen_random_uuid(),
+  lobby_id text not null references public.lobbies (id) on delete cascade,
+  rater_profile_id text not null references public.profiles (id) on delete cascade,
+  rated_profile_id text not null references public.profiles (id) on delete cascade,
+  rating numeric(3, 1) not null check (rating between 1.0 and 10.0),
+  field_rating integer check (field_rating between 1 and 5),
+  game_level text check (game_level in ('beginner', 'intermediate', 'advanced')),
+  created_at timestamptz not null default now(),
+  unique (lobby_id, rater_profile_id, rated_profile_id),
+  check (rater_profile_id <> rated_profile_id)
+);
+
 create index if not exists profiles_auth_user_id_idx on public.profiles (auth_user_id);
 create index if not exists lobbies_datetime_idx on public.lobbies (datetime);
 create index if not exists lobby_memberships_profile_id_idx on public.lobby_memberships (profile_id);
 create index if not exists friend_requests_to_profile_status_idx on public.friend_requests (to_profile_id, status);
+create index if not exists lobby_ratings_lobby_id_idx on public.lobby_ratings (lobby_id);
+create index if not exists lobby_ratings_rated_profile_id_idx on public.lobby_ratings (rated_profile_id);
 
 alter table public.profiles enable row level security;
 alter table public.lobbies enable row level security;
 alter table public.lobby_memberships enable row level security;
 alter table public.friend_requests enable row level security;
+alter table public.lobby_ratings enable row level security;
 
 drop policy if exists "profiles are readable by everyone" on public.profiles;
 create policy "profiles are readable by everyone"
@@ -287,4 +304,32 @@ to authenticated
 using (
   bucket_id = 'avatars'
   and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "authenticated users can submit lobby ratings" on public.lobby_ratings;
+create policy "authenticated users can submit lobby ratings"
+on public.lobby_ratings
+for insert
+to authenticated
+with check (
+  exists (
+    select 1
+    from public.profiles p
+    where p.id = rater_profile_id
+      and p.auth_user_id = auth.uid()
+  )
+);
+
+drop policy if exists "lobby ratings readable by participants" on public.lobby_ratings;
+create policy "lobby ratings readable by participants"
+on public.lobby_ratings
+for select
+to authenticated
+using (
+  exists (
+    select 1
+    from public.profiles p
+    where p.auth_user_id = auth.uid()
+      and p.id in (rater_profile_id, rated_profile_id)
+  )
 );

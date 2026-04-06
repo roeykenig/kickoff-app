@@ -21,7 +21,7 @@ export type CreateLobbyDraft = {
   time: string;
   numTeams: number;
   playersPerTeam: number;
-  minRating: number;
+  minRating?: number;
   price?: number;
   description?: string;
 };
@@ -34,7 +34,7 @@ export type CreateLobbyPayload = {
   datetime: string;
   numTeams: number;
   playersPerTeam: number;
-  minRating: number;
+  minRating?: number;
   price?: number;
   description?: string;
 };
@@ -135,7 +135,7 @@ export function validateCreateLobbyDraft(input: CreateLobbyDraft, now = new Date
     errors.push('Total max players must be between 6 and 44.');
   }
 
-  if (!Number.isFinite(input.minRating) || input.minRating < 1 || input.minRating > 10) {
+  if (typeof input.minRating === 'number' && (!Number.isFinite(input.minRating) || input.minRating < 1 || input.minRating > 10)) {
     errors.push('Minimum rating must be between 1 and 10.');
   }
 
@@ -194,7 +194,7 @@ export function validateCreateLobbyPayload(input: CreateLobbyPayload, now = new 
     errors.push('Total max players must be between 6 and 44.');
   }
 
-  if (!Number.isFinite(input.minRating) || input.minRating < 1 || input.minRating > 10) {
+  if (typeof input.minRating === 'number' && (!Number.isFinite(input.minRating) || input.minRating < 1 || input.minRating > 10)) {
     errors.push('Minimum rating must be between 1 and 10.');
   }
 

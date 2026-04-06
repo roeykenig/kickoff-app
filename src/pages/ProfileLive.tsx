@@ -28,6 +28,16 @@ export default function ProfileLive() {
       .filter((user): user is AuthUser => Boolean(user));
   }, [allUsers, currentUser, isMe]);
 
+  const friendsList = useMemo(() => {
+    if (!isMe || !currentUser) {
+      return [];
+    }
+
+    return currentUser.friends
+      .map((friendId) => allUsers.find((user) => user.id === friendId))
+      .filter((user): user is AuthUser => Boolean(user));
+  }, [allUsers, currentUser, isMe]);
+
   type FriendStatus = 'self' | 'friend' | 'sent' | 'pending' | 'none';
 
   const friendStatus: FriendStatus = (() => {
@@ -226,6 +236,39 @@ export default function ProfileLive() {
           />
         </div>
       </div>
+
+      {isMe && friendsList.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4">
+          <h2 className="font-semibold text-gray-900 mb-4">
+            {lang === 'he' ? `חברים (${friendsList.length})` : `Friends (${friendsList.length})`}
+          </h2>
+          <div className="space-y-2">
+            {friendsList.map((friend) => (
+              <button
+                key={friend.id}
+                onClick={() => navigate(`/profile/${friend.id}`)}
+                className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50 transition-colors text-start"
+              >
+                {friend.photoUrl ? (
+                  <img src={friend.photoUrl} alt={friend.name} className="w-9 h-9 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className={`w-9 h-9 rounded-full ${friend.avatarColor} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
+                    {friend.initials}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-800">{friend.name}</p>
+                  {friend.position && <p className="text-xs text-gray-400">{friend.position}</p>}
+                </div>
+                <div className="shrink-0 text-end">
+                  <p className="text-sm font-semibold text-gray-700">★ {friend.rating.toFixed(1)}</p>
+                  <p className="text-xs text-gray-400">{friend.gamesPlayed} {lang === 'he' ? 'משחקים' : 'games'}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {profile.ratingHistory.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4">

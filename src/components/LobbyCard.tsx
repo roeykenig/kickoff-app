@@ -39,9 +39,14 @@ export default function LobbyCard({ lobby }: Props) {
               {lobby.title}
             </h3>
           </div>
-          <p className="text-sm text-gray-500">{lobby.city}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-sm text-gray-500">{lobby.city}</p>
+            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${lobby.gameType === 'competitive' ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'}`}>
+              {lobby.gameType === 'competitive' ? '🏆' : '⚽'}
+            </span>
+          </div>
         </div>
-        {avg !== null && <RatingBadge rating={avg} size="sm" />}
+        {avg !== null && lobby.gameType === 'competitive' && <RatingBadge rating={avg} size="sm" />}
       </div>
 
       {/* Info rows */}
@@ -65,7 +70,7 @@ export default function LobbyCard({ lobby }: Props) {
             <span className="text-red-500 font-medium ms-auto">{t.lobby.full}</span>
           )}
         </div>
-        {lobby.minRating && (
+        {lobby.minRating && lobby.gameType === 'competitive' && (
           <div className="text-xs text-gray-400">
             {lang === 'he' ? `מינימום: ★ ${lobby.minRating.toFixed(1)}` : `Min: ★ ${lobby.minRating.toFixed(1)}`}
           </div>

@@ -7,6 +7,7 @@ import { fetchLobbies } from '../lib/appData';
 import type { Lobby } from '../types';
 
 type Tab = 'all' | 'friends';
+type GameTypeFilter = 'all' | 'friendly' | 'competitive';
 
 function avgRating(players: { rating: number }[]) {
   if (!players.length) return 0;
@@ -23,6 +24,7 @@ export default function HomeLive() {
   const [minRating, setMinRating] = useState(1);
   const [canJoinOnly, setCanJoinOnly] = useState(false);
   const [tab, setTab] = useState<Tab>('all');
+  const [gameTypeFilter, setGameTypeFilter] = useState<GameTypeFilter>('all');
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -59,7 +61,11 @@ export default function HomeLive() {
   const futureLobbies = lobbies.filter(isFuture);
 
   const allFiltered = futureLobbies.filter((lobby) => {
-    if (avgRating(lobby.players) < minRating && lobby.players.length > 0) {
+    if (gameTypeFilter !== 'all' && lobby.gameType !== gameTypeFilter) {
+      return false;
+    }
+
+    if (lobby.gameType === 'competitive' && avgRating(lobby.players) < minRating && lobby.players.length > 0) {
       return false;
     }
 
@@ -83,7 +89,7 @@ export default function HomeLive() {
         <p className="text-gray-500 text-base">{t.home.subtitle}</p>
       </div>
 
-      <div className="flex gap-2 justify-center mb-5">
+      <div className="flex gap-2 justify-center mb-3">
         <TabBtn active={tab === 'all'} onClick={() => setTab('all')}>
           {lang === 'he' ? 'כל המשחקים' : 'All Games'}
         </TabBtn>
@@ -99,28 +105,44 @@ export default function HomeLive() {
       </div>
 
       {tab === 'all' && (
+        <div className="flex gap-2 justify-center mb-5">
+          <PillBtn active={gameTypeFilter === 'all'} onClick={() => setGameTypeFilter('all')}>
+            {lang === 'he' ? 'הכל' : 'All'}
+          </PillBtn>
+          <PillBtn active={gameTypeFilter === 'friendly'} color="green" onClick={() => setGameTypeFilter('friendly')}>
+            {lang === 'he' ? '⚽ ידידותי' : '⚽ Friendly'}
+          </PillBtn>
+          <PillBtn active={gameTypeFilter === 'competitive'} color="blue" onClick={() => setGameTypeFilter('competitive')}>
+            {lang === 'he' ? '🏆 תחרותי' : '🏆 Competitive'}
+          </PillBtn>
+        </div>
+      )}
+
+      {tab === 'all' && (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 mb-6 max-w-md mx-auto space-y-3">
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-medium text-gray-700">
-                {lang === 'he' ? 'דירוג ממוצע מינימלי' : 'Min average rating'}
-              </span>
-              <span className="text-sm font-bold text-primary-600">★ {minRating.toFixed(1)}</span>
+          {gameTypeFilter !== 'friendly' && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-sm font-medium text-gray-700">
+                  {lang === 'he' ? 'דירוג ממוצע מינימלי' : 'Min average rating'}
+                </span>
+                <span className="text-sm font-bold text-primary-600">★ {minRating.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                step="0.5"
+                value={minRating}
+                onChange={(event) => setMinRating(parseFloat(event.target.value))}
+                className="w-full accent-primary-600"
+              />
+              <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+                <span>1.0</span>
+                <span>10.0</span>
+              </div>
             </div>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              step="0.5"
-              value={minRating}
-              onChange={(event) => setMinRating(parseFloat(event.target.value))}
-              className="w-full accent-primary-600"
-            />
-            <div className="flex justify-between text-xs text-gray-400 mt-0.5">
-              <span>1.0</span>
-              <span>10.0</span>
-            </div>
-          </div>
+          )}
 
           {currentUser && (
             <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -180,6 +202,24 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
         active
           ? 'bg-primary-600 text-white shadow-sm'
           : 'bg-white text-gray-600 border border-gray-200 hover:border-primary-300 hover:text-primary-600'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function PillBtn({ active, onClick, children, color = 'blue' }: { active: boolean; onClick: () => void; children: React.ReactNode; color?: 'blue' | 'green' }) {
+  const activeClass = color === 'green'
+    ? 'bg-green-500 text-white shadow-sm'
+    : 'bg-primary-600 text-white shadow-sm';
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+        active
+          ? activeClass
+          : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'
       }`}
     >
       {children}

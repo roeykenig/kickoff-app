@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertCircle, ChevronLeft, Clock, Lock, MapPin, ShieldCheck, Users } from 'lucide-react';
+import { AlertCircle, ChevronLeft, Clock, Lock, MapPin, ShieldCheck, Star, Users } from 'lucide-react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import RatingDisplay, { RatingBadge } from '../components/RatingDisplay';
 import { useLang } from '../contexts/LanguageContext';
@@ -28,6 +28,8 @@ export default function LobbyDetailLive() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [ballContributors, setBallContributors] = useState<Set<string>>(new Set());
+  const [speakerContributors, setSpeakerContributors] = useState<Set<string>>(new Set());
 
   async function loadLobby() {
     if (!id) {
@@ -77,6 +79,11 @@ export default function LobbyDetailLive() {
   const isFull = resolvedLobby.players.length >= resolvedLobby.maxPlayers;
   const dateStr = formatDateTime(resolvedLobby.datetime, lang, t.common.today, t.common.tomorrow);
   const avg = avgRating(resolvedLobby.players);
+  const isCompetitive = resolvedLobby.gameType === 'competitive';
+  const gameHasPassed = new Date(resolvedLobby.datetime) < new Date();
+  const ratingWindowOpen = isCompetitive && gameHasPassed && (new Date().getTime() - new Date(resolvedLobby.datetime).getTime()) < 24 * 60 * 60 * 1000;
+  const iAmParticipant = currentUser ? resolvedLobby.players.some((p) => p.id === currentUser.id) : false;
+  const canRate = ratingWindowOpen && iAmParticipant;
   const myWaitlistIndex = currentUser ? resolvedLobby.waitlist.findIndex((player) => player.id === currentUser.id) : -1;
   const isFirstWaitlisted = myWaitlistIndex === 0;
 
@@ -152,12 +159,15 @@ export default function LobbyDetailLive() {
             <div className="flex items-center gap-2 mb-1">
               {lobby.isPrivate && <Lock size={14} className="text-gray-400" />}
               <h1 className="text-2xl font-bold text-gray-900">{lobby.title}</h1>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${isCompetitive ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'}`}>
+                {isCompetitive ? (lang === 'he' ? '🏆 תחרותי' : '🏆 Competitive') : (lang === 'he' ? '⚽ ידידותי' : '⚽ Friendly')}
+              </span>
             </div>
             <p className="text-gray-500">
               {lobby.fieldName}, {lobby.city}
             </p>
           </div>
-          {avg !== null && (
+          {avg !== null && isCompetitive && (
             <div className="text-end">
               <RatingBadge rating={avg} />
               <p className="text-xs text-gray-400 mt-1">{lang === 'he' ? 'ממוצע שחקנים' : 'avg rating'}</p>
@@ -192,7 +202,7 @@ export default function LobbyDetailLive() {
           </InfoRow>
         </div>
 
-        {lobby.minRating && (
+        {lobby.minRating && isCompetitive && (
           <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
             <span className="text-gray-400">{lang === 'he' ? 'דירוג מינימלי:' : 'Min rating:'}</span>
             <RatingDisplay rating={lobby.minRating} size="sm" />
@@ -216,9 +226,41 @@ export default function LobbyDetailLive() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4">
-        <h2 className="font-semibold text-gray-900 mb-4">
-          {t.lobby.playerList} ({lobby.players.length}/{lobby.maxPlayers})
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-gray-900">
+            {t.lobby.playerList} ({lobby.players.length}/{lobby.maxPlayers})
+          </h2>
+          {currentUser && lobby.players.some((p) => p.id === currentUser.id) && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  if (!currentUser) return;
+                  setBallContributors((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(currentUser.id)) next.delete(currentUser.id); else next.add(currentUser.id);
+                    return next;
+                  });
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium transition-colors border ${ballContributors.has(currentUser.id) ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}
+              >
+                ⚽ <span>{ballContributors.size}</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (!currentUser) return;
+                  setSpeakerContributors((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(currentUser.id)) next.delete(currentUser.id); else next.add(currentUser.id);
+                    return next;
+                  });
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium transition-colors border ${speakerContributors.has(currentUser.id) ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}
+              >
+                🔊 <span>{speakerContributors.size}</span>
+              </button>
+            </div>
+          )}
+        </div>
         <div className="space-y-1">
           {lobby.players.map((player) => (
             <button
@@ -234,8 +276,10 @@ export default function LobbyDetailLive() {
                 </div>
               )}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <p className="font-medium text-gray-900 text-sm">{player.name}</p>
+                  {ballContributors.has(player.id) && <span className="text-xs">⚽</span>}
+                  {speakerContributors.has(player.id) && <span className="text-xs">🔊</span>}
                   {player.id === lobby.createdBy && (
                     <span className="text-xs bg-primary-100 text-primary-700 px-1.5 py-0.5 rounded-full">{t.lobby.organizer}</span>
                   )}
@@ -278,6 +322,16 @@ export default function LobbyDetailLive() {
       )}
 
       {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+
+      {canRate && (
+        <button
+          onClick={() => navigate(`/lobby/${lobbyId}/rate`)}
+          className="w-full py-4 rounded-2xl font-semibold text-base bg-amber-500 hover:bg-amber-600 text-white transition-colors shadow-md hover:shadow-lg mb-4 flex items-center justify-center gap-2"
+        >
+          <Star size={18} />
+          {lang === 'he' ? 'דרג את המשחק' : 'Rate the game'}
+        </button>
+      )}
 
       {myStatus === 'pending_confirm' && (
         <div className="bg-green-50 border border-green-200 rounded-2xl p-5 mb-4 text-center">
@@ -322,7 +376,7 @@ export default function LobbyDetailLive() {
             <button
               onClick={handleLeave}
               disabled={saving}
-              className="w-full py-4 rounded-2xl font-semibold text-base bg-gray-100 hover:bg-gray-200 disabled:opacity-60 text-gray-600 transition-colors"
+              className="w-full py-4 rounded-2xl font-semibold text-base bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white transition-colors"
             >
               {t.lobby.leave}
             </button>

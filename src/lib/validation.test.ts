@@ -33,6 +33,7 @@ function makeLobby(overrides: Partial<Lobby> = {}): Lobby {
     createdBy: 'player-1',
     distanceKm: 1,
     waitlist: [],
+    gameType: 'competitive',
     ...overrides,
   };
 }

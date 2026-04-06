@@ -59,6 +59,7 @@ export default function CreateLobbyLive() {
         price: form.price ? Number(form.price) : undefined,
         description: form.description || undefined,
         createdBy: currentUserId,
+        gameType: 'competitive',
       });
 
       navigate(`/lobby/${lobbyId}`);

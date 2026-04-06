@@ -1,5 +1,6 @@
 export type Language = 'he' | 'en';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'mixed';
+export type GameType = 'friendly' | 'competitive';
 
 export interface RatingEntry {
   date: string;
@@ -51,6 +52,7 @@ export interface Lobby {
   createdBy: string;
   distanceKm: number;
   waitlist: Player[];
+  gameType: GameType;
 }
 
 export interface AuthUser {
