@@ -110,7 +110,7 @@ export default function HomeLive() {
             {lang === 'he' ? 'הכל' : 'All'}
           </PillBtn>
           <PillBtn active={gameTypeFilter === 'friendly'} color="green" onClick={() => setGameTypeFilter('friendly')}>
-            {lang === 'he' ? '⚽ ידידותי' : '⚽ Friendly'}
+            {lang === 'he' ? '🤝 ידידותי' : '🤝 Friendly'}
           </PillBtn>
           <PillBtn active={gameTypeFilter === 'competitive'} color="blue" onClick={() => setGameTypeFilter('competitive')}>
             {lang === 'he' ? '🏆 תחרותי' : '🏆 Competitive'}
@@ -144,7 +144,7 @@ export default function HomeLive() {
             </div>
           )}
 
-          {currentUser && (
+          {currentUser && gameTypeFilter !== 'friendly' && (
             <label className="flex items-center gap-3 cursor-pointer select-none">
               <div
                 onClick={() => setCanJoinOnly((value) => !value)}

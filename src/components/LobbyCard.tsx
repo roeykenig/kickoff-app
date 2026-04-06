@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Users, Lock } from 'lucide-react';
+import { MapPin, Clock, Users, Lock, Handshake, Trophy } from 'lucide-react';
 import { Lobby } from '../types';
 import { useLang } from '../contexts/LanguageContext';
 import { formatDateTime } from '../utils/format';
@@ -39,11 +39,21 @@ export default function LobbyCard({ lobby }: Props) {
               {lobby.title}
             </h3>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-sm text-gray-500">{lobby.city}</p>
-            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${lobby.gameType === 'competitive' ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'}`}>
-              {lobby.gameType === 'competitive' ? '🏆' : '⚽'}
+            <span className={`inline-flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full font-medium ${lobby.gameType === 'competitive' ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'}`}>
+              {lobby.gameType === 'competitive' ? <Trophy size={10} /> : <Handshake size={10} />}
             </span>
+            {lobby.fieldType && (
+              <span className="text-xs text-gray-400">
+                {lobby.fieldType === 'grass' ? '🌿' : lobby.fieldType === 'asphalt' ? '⬛' : '🏟️'}
+              </span>
+            )}
+            {lobby.genderRestriction !== 'none' && (
+              <span className="text-xs text-gray-400">
+                {lobby.genderRestriction === 'male' ? '👨' : '👩'}
+              </span>
+            )}
           </div>
         </div>
         {avg !== null && lobby.gameType === 'competitive' && <RatingBadge rating={avg} size="sm" />}

@@ -4,7 +4,7 @@ import { createLobby } from '../lib/appData';
 import { useAuth } from '../contexts/SupabaseAuthContext';
 import { useLang } from '../contexts/LanguageContext';
 import { buildLobbyDateTime, validateCreateLobbyDraft } from '../lib/validation';
-import type { GameType } from '../types';
+import type { GameType, FieldType, GenderRestriction } from '../types';
 
 const TEAM_OPTIONS = [2, 3, 4];
 
@@ -13,6 +13,8 @@ export default function CreateLobbyPage() {
   const { currentUser } = useAuth();
   const { t, lang } = useLang();
   const [gameType, setGameType] = useState<GameType>('friendly');
+  const [fieldType, setFieldType] = useState<FieldType | ''>('');
+  const [genderRestriction, setGenderRestriction] = useState<GenderRestriction>('none');
   const [form, setForm] = useState({
     title: '',
     fieldName: '',
@@ -85,6 +87,8 @@ export default function CreateLobbyPage() {
         description: form.description || undefined,
         createdBy: currentUserId,
         gameType,
+        fieldType: fieldType || undefined,
+        genderRestriction,
       });
 
       navigate(`/lobby/${lobbyId}`);
@@ -239,6 +243,43 @@ export default function CreateLobbyPage() {
           <Field label={t.create.price}>
             <Input type="number" min="0" value={form.price} onChange={setField('price')} placeholder={t.create.pricePlaceholder} />
           </Field>
+        </Card>
+
+        <Card>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {lang === 'he' ? 'סוג מגרש (אופציונלי)' : 'Field type (optional)'}
+            </label>
+            <div className="flex gap-2">
+              {([['grass', lang === 'he' ? '🌿 דשא' : '🌿 Grass'], ['asphalt', lang === 'he' ? '⬛ אספלט' : '⬛ Asphalt'], ['indoor', lang === 'he' ? '🏟️ אולם' : '🏟️ Indoor']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setFieldType((prev) => prev === val ? '' : val)}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border ${fieldType === val ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {lang === 'he' ? 'מגבלת מגדר' : 'Gender restriction'}
+            </label>
+            <div className="flex gap-2">
+              {([['none', lang === 'he' ? 'כולם' : 'All'], ['male', lang === 'he' ? '👨 גברים' : '👨 Men only'], ['female', lang === 'he' ? '👩 נשים' : '👩 Women only']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setGenderRestriction(val)}
+                  className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all border ${genderRestriction === val ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-600 border-gray-200 hover:border-primary-300'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </Card>
 
         <Card>

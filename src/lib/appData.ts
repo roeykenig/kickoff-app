@@ -1,4 +1,4 @@
-import type { Lobby, Player, RatingEntry, LobbyHistoryEntry, GameType } from '../types';
+import type { Lobby, Player, RatingEntry, LobbyHistoryEntry, GameType, FieldType, GenderRestriction, Gender, ContributionType } from '../types';
 import { requireSupabase } from './supabase';
 import { getJoinLobbyError, normalizeText, validateCreateLobbyPayload } from './validation';
 
@@ -13,6 +13,7 @@ type ProfileRow = {
   position: string | null;
   bio: string | null;
   photo_url: string | null;
+  gender: Gender | null;
   rating_history: RatingEntry[];
   lobby_history: LobbyHistoryEntry[];
 };
@@ -34,6 +35,8 @@ type LobbyRow = {
   created_by: string;
   distance_km: number;
   game_type: GameType;
+  field_type: FieldType | null;
+  gender_restriction: GenderRestriction;
 };
 
 type MembershipRow = {
@@ -55,6 +58,7 @@ function mapProfile(row: ProfileRow): Player {
     bio: row.bio ?? undefined,
     email: row.email ?? undefined,
     photoUrl: row.photo_url ?? undefined,
+    gender: row.gender ?? undefined,
     ratingHistory: row.rating_history ?? [],
     lobbyHistory: row.lobby_history ?? [],
   };
@@ -64,7 +68,7 @@ export async function fetchProfiles(): Promise<Player[]> {
   const supabase = requireSupabase();
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, name, initials, avatar_color, rating, games_played, position, bio, photo_url, rating_history, lobby_history')
+    .select('id, email, name, initials, avatar_color, rating, games_played, position, bio, photo_url, gender, rating_history, lobby_history')
     .order('name', { ascending: true });
 
   if (error) {
@@ -78,7 +82,7 @@ export async function fetchProfileById(id: string): Promise<Player | null> {
   const supabase = requireSupabase();
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, email, name, initials, avatar_color, rating, games_played, position, bio, photo_url, rating_history, lobby_history')
+    .select('id, email, name, initials, avatar_color, rating, games_played, position, bio, photo_url, gender, rating_history, lobby_history')
     .eq('id', id)
     .maybeSingle();
 
@@ -89,17 +93,50 @@ export async function fetchProfileById(id: string): Promise<Player | null> {
   return data ? mapProfile(data as ProfileRow) : null;
 }
 
+export type UpdateProfileInput = {
+  profileId: string;
+  name: string;
+  position?: string;
+  bio?: string;
+  gender?: Gender;
+  photoUrl?: string | null;
+};
+
+export async function updateProfile(input: UpdateProfileInput) {
+  const supabase = requireSupabase();
+  const parts = input.name.trim().split(' ').filter(Boolean);
+  const initials = parts.length >= 2
+    ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+    : input.name.trim().slice(0, 2).toUpperCase() || '?';
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({
+      name: input.name.trim(),
+      initials,
+      position: input.position ?? null,
+      bio: input.bio ?? null,
+      gender: input.gender ?? null,
+      ...(input.photoUrl !== undefined ? { photo_url: input.photoUrl } : {}),
+    })
+    .eq('id', input.profileId);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function fetchLobbies(): Promise<Lobby[]> {
   const supabase = requireSupabase();
 
   const [{ data: lobbyRows, error: lobbiesError }, { data: profileRows, error: profilesError }, { data: membershipRows, error: membershipsError }] = await Promise.all([
     supabase
       .from('lobbies')
-      .select('id, title, field_name, address, city, datetime, max_players, num_teams, players_per_team, min_rating, is_private, price, description, created_by, distance_km, game_type')
+      .select('id, title, field_name, address, city, datetime, max_players, num_teams, players_per_team, min_rating, is_private, price, description, created_by, distance_km, game_type, field_type, gender_restriction')
       .order('datetime', { ascending: true }),
     supabase
       .from('profiles')
-      .select('id, email, name, initials, avatar_color, rating, games_played, position, bio, photo_url, rating_history, lobby_history'),
+      .select('id, email, name, initials, avatar_color, rating, games_played, position, bio, photo_url, gender, rating_history, lobby_history'),
     supabase
       .from('lobby_memberships')
       .select('lobby_id, profile_id, status, created_at'),
@@ -155,6 +192,8 @@ export async function fetchLobbies(): Promise<Lobby[]> {
       distanceKm: row.distance_km,
       waitlist,
       gameType: row.game_type ?? 'friendly',
+      fieldType: row.field_type ?? undefined,
+      genderRestriction: row.gender_restriction ?? 'none',
     };
   });
 }
@@ -178,6 +217,8 @@ export type CreateLobbyInput = {
   description?: string;
   createdBy: string;
   gameType: GameType;
+  fieldType?: FieldType;
+  genderRestriction?: GenderRestriction;
 };
 
 export async function createLobby(input: CreateLobbyInput): Promise<string> {
@@ -218,6 +259,8 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
     created_by: input.createdBy,
     distance_km: 0,
     game_type: input.gameType,
+    field_type: input.fieldType ?? null,
+    gender_restriction: input.genderRestriction ?? 'none',
   });
 
   if (lobbyError) {
@@ -319,6 +362,88 @@ export async function submitLobbyRatings(input: LobbyRatingSubmission) {
   const { error } = await supabase.from('lobby_ratings').insert(rows);
   if (error) {
     throw error;
+  }
+}
+
+export type UpdateLobbyInput = {
+  lobbyId: string;
+  title: string;
+  fieldName: string;
+  address: string;
+  city: string;
+  datetime: string;
+  numTeams?: number;
+  playersPerTeam?: number;
+  minRating?: number;
+  price?: number;
+  description?: string;
+  gameType: GameType;
+  fieldType?: FieldType;
+  genderRestriction: GenderRestriction;
+};
+
+export async function updateLobby(input: UpdateLobbyInput) {
+  const supabase = requireSupabase();
+  const { error } = await supabase
+    .from('lobbies')
+    .update({
+      title: normalizeText(input.title),
+      field_name: normalizeText(input.fieldName),
+      address: normalizeText(input.address),
+      city: normalizeText(input.city),
+      datetime: input.datetime,
+      num_teams: input.numTeams ?? null,
+      players_per_team: input.playersPerTeam ?? null,
+      max_players: (input.numTeams ?? 2) * (input.playersPerTeam ?? 5),
+      min_rating: input.gameType === 'competitive' ? (input.minRating ?? null) : null,
+      price: input.price ?? null,
+      description: input.description ? normalizeText(input.description) : null,
+      game_type: input.gameType,
+      field_type: input.fieldType ?? null,
+      gender_restriction: input.genderRestriction,
+    })
+    .eq('id', input.lobbyId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function fetchContributions(lobbyId: string): Promise<{ profileId: string; type: ContributionType }[]> {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase
+    .from('lobby_contributions')
+    .select('profile_id, type')
+    .eq('lobby_id', lobbyId);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row: { profile_id: string; type: string }) => ({
+    profileId: row.profile_id,
+    type: row.type as ContributionType,
+  }));
+}
+
+export async function toggleContribution(lobbyId: string, profileId: string, type: ContributionType, currentlyActive: boolean) {
+  const supabase = requireSupabase();
+
+  if (currentlyActive) {
+    const { error } = await supabase
+      .from('lobby_contributions')
+      .delete()
+      .eq('lobby_id', lobbyId)
+      .eq('profile_id', profileId)
+      .eq('type', type);
+
+    if (error) throw error;
+  } else {
+    const { error } = await supabase
+      .from('lobby_contributions')
+      .insert({ lobby_id: lobbyId, profile_id: profileId, type });
+
+    if (error) throw error;
   }
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, Clock, MapPin, Minus, TrendingDown, TrendingUp, UserCheck, UserPlus, UserX } from 'lucide-react';
+import { ChevronLeft, Clock, MapPin, Minus, Pencil, TrendingDown, TrendingUp, UserCheck, UserPlus, UserX } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import RatingDisplay from '../components/RatingDisplay';
 import { useLang } from '../contexts/LanguageContext';
@@ -147,10 +147,25 @@ export default function ProfileLive() {
               <div>
                 <h1 className="text-xl font-bold text-gray-900">{profile.name}</h1>
                 {profile.position && <p className="text-sm text-gray-500 mt-0.5">{profile.position}</p>}
+                {profile.gender && (
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {profile.gender === 'male' ? '👨 ' : profile.gender === 'female' ? '👩 ' : '⚧ '}
+                    {profile.gender === 'male' ? (lang === 'he' ? 'זכר' : 'Male') : profile.gender === 'female' ? (lang === 'he' ? 'נקבה' : 'Female') : (lang === 'he' ? 'אחר' : 'Other')}
+                  </p>
+                )}
                 {isMe && (
-                  <span className="inline-block mt-1 text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full">
-                    {lang === 'he' ? 'הפרופיל שלי' : 'My Profile'}
-                  </span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full">
+                      {lang === 'he' ? 'הפרופיל שלי' : 'My Profile'}
+                    </span>
+                    <button
+                      onClick={() => navigate(`/profile/${currentUser!.id}/edit`)}
+                      className="flex items-center gap-1 text-xs text-gray-500 hover:text-primary-600 transition-colors"
+                    >
+                      <Pencil size={12} />
+                      {lang === 'he' ? 'ערוך' : 'Edit'}
+                    </button>
+                  </div>
                 )}
               </div>
               <div className={`rounded-2xl p-3 text-center ${ratingBg}`}>

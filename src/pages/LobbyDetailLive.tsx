@@ -1,12 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertCircle, ChevronLeft, Clock, Lock, MapPin, ShieldCheck, Star, Users } from 'lucide-react';
+import { AlertCircle, ChevronLeft, Clock, ExternalLink, Handshake, Lock, MapPin, Pencil, ShieldCheck, Star, Trophy, Users } from 'lucide-react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import RatingDisplay, { RatingBadge } from '../components/RatingDisplay';
 import { useLang } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/SupabaseAuthContext';
-import { deleteLobbyMembership, fetchLobbyById, upsertLobbyMembership } from '../lib/appData';
+import { deleteLobbyMembership, fetchContributions, fetchLobbyById, toggleContribution, upsertLobbyMembership } from '../lib/appData';
 import { getJoinLobbyError } from '../lib/validation';
-import type { Lobby } from '../types';
+import type { ContributionType, Lobby } from '../types';
 import { formatDateTime } from '../utils/format';
 
 type MyStatus = 'none' | 'joined' | 'waitlisted' | 'pending_confirm';
@@ -28,8 +28,7 @@ export default function LobbyDetailLive() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [ballContributors, setBallContributors] = useState<Set<string>>(new Set());
-  const [speakerContributors, setSpeakerContributors] = useState<Set<string>>(new Set());
+  const [contributions, setContributions] = useState<{ profileId: string; type: ContributionType }[]>([]);
 
   async function loadLobby() {
     if (!id) {
@@ -41,8 +40,12 @@ export default function LobbyDetailLive() {
     try {
       setLoading(true);
       setError('');
-      const nextLobby = await fetchLobbyById(id);
+      const [nextLobby, nextContributions] = await Promise.all([
+        fetchLobbyById(id),
+        fetchContributions(id),
+      ]);
       setLobby(nextLobby);
+      setContributions(nextContributions);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Failed to load game');
     } finally {
@@ -80,6 +83,11 @@ export default function LobbyDetailLive() {
   const dateStr = formatDateTime(resolvedLobby.datetime, lang, t.common.today, t.common.tomorrow);
   const avg = avgRating(resolvedLobby.players);
   const isCompetitive = resolvedLobby.gameType === 'competitive';
+  const isCreator = currentUser?.id === resolvedLobby.createdBy;
+  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(`${resolvedLobby.address}, ${resolvedLobby.city}`)}`;
+  const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(`${resolvedLobby.address}, ${resolvedLobby.city}`)}&navigate=yes`;
+  const ballContributors = new Set(contributions.filter((c) => c.type === 'ball').map((c) => c.profileId));
+  const speakerContributors = new Set(contributions.filter((c) => c.type === 'speaker').map((c) => c.profileId));
   const gameHasPassed = new Date(resolvedLobby.datetime) < new Date();
   const ratingWindowOpen = isCompetitive && gameHasPassed && (new Date().getTime() - new Date(resolvedLobby.datetime).getTime()) < 24 * 60 * 60 * 1000;
   const iAmParticipant = currentUser ? resolvedLobby.players.some((p) => p.id === currentUser.id) : false;
@@ -146,12 +154,35 @@ export default function LobbyDetailLive() {
     void runMembershipAction(() => upsertLobbyMembership(lobbyId, currentUser.id, 'joined'));
   }
 
+  async function handleToggleContribution(type: ContributionType) {
+    if (!currentUser) return;
+    const currentlyActive = type === 'ball' ? ballContributors.has(currentUser.id) : speakerContributors.has(currentUser.id);
+    try {
+      await toggleContribution(lobbyId, currentUser.id, type, currentlyActive);
+      const nextContributions = await fetchContributions(lobbyId);
+      setContributions(nextContributions);
+    } catch {
+      // silent fail
+    }
+  }
+
   return (
     <main className="max-w-2xl mx-auto px-4 py-8">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-primary-600 mb-6 transition-colors">
-        <ChevronLeft size={16} />
-        {t.lobby.back}
-      </button>
+      <div className="flex items-center justify-between mb-6">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-gray-500 hover:text-primary-600 transition-colors">
+          <ChevronLeft size={16} />
+          {t.lobby.back}
+        </button>
+        {isCreator && (
+          <button
+            onClick={() => navigate(`/lobby/${lobbyId}/edit`)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary-600 border border-primary-200 hover:bg-primary-50 rounded-xl transition-colors"
+          >
+            <Pencil size={14} />
+            {lang === 'he' ? 'ערוך' : 'Edit'}
+          </button>
+        )}
+      </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4">
         <div className="flex items-start justify-between gap-3 mb-4">
@@ -159,8 +190,9 @@ export default function LobbyDetailLive() {
             <div className="flex items-center gap-2 mb-1">
               {lobby.isPrivate && <Lock size={14} className="text-gray-400" />}
               <h1 className="text-2xl font-bold text-gray-900">{lobby.title}</h1>
-              <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${isCompetitive ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'}`}>
-                {isCompetitive ? (lang === 'he' ? '🏆 תחרותי' : '🏆 Competitive') : (lang === 'he' ? '⚽ ידידותי' : '⚽ Friendly')}
+              <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${isCompetitive ? 'bg-primary-100 text-primary-700' : 'bg-green-100 text-green-700'}`}>
+                {isCompetitive ? <Trophy size={11} /> : <Handshake size={11} />}
+                {isCompetitive ? (lang === 'he' ? 'תחרותי' : 'Competitive') : (lang === 'he' ? 'ידידותי' : 'Friendly')}
               </span>
             </div>
             <p className="text-gray-500">
@@ -180,9 +212,19 @@ export default function LobbyDetailLive() {
             <span>
               {lobby.address}, {lobby.city}
             </span>
-            <span className="text-gray-400 block text-xs">
+            <span className="text-gray-400 block text-xs mb-1">
               {lobby.distanceKm} {t.common.km} {t.common.away}
             </span>
+            <div className="flex gap-2 mt-1">
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors font-medium">
+                <ExternalLink size={11} />
+                Google Maps
+              </a>
+              <a href={wazeUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors font-medium">
+                <ExternalLink size={11} />
+                Waze
+              </a>
+            </div>
           </InfoRow>
           <InfoRow icon={<Clock size={15} />} label={t.lobby.dateTime}>
             {dateStr}
@@ -208,6 +250,20 @@ export default function LobbyDetailLive() {
             <RatingDisplay rating={lobby.minRating} size="sm" />
           </div>
         )}
+        <div className="mt-2 flex flex-wrap gap-2">
+          {lobby.fieldType && (
+            <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+              {lobby.fieldType === 'grass' ? '🌿' : lobby.fieldType === 'asphalt' ? '⬛' : '🏟️'}
+              {' '}{lobby.fieldType === 'grass' ? (lang === 'he' ? 'דשא' : 'Grass') : lobby.fieldType === 'asphalt' ? (lang === 'he' ? 'אספלט' : 'Asphalt') : (lang === 'he' ? 'אולם' : 'Indoor')}
+            </span>
+          )}
+          {lobby.genderRestriction !== 'none' && (
+            <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
+              {lobby.genderRestriction === 'male' ? '👨 ' : '👩 '}
+              {lobby.genderRestriction === 'male' ? (lang === 'he' ? 'גברים בלבד' : 'Men only') : (lang === 'he' ? 'נשים בלבד' : 'Women only')}
+            </span>
+          )}
+        </div>
 
         {lobby.description && (
           <div className="mt-4 pt-4 border-t border-gray-100">
@@ -233,27 +289,13 @@ export default function LobbyDetailLive() {
           {currentUser && lobby.players.some((p) => p.id === currentUser.id) && (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  if (!currentUser) return;
-                  setBallContributors((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(currentUser.id)) next.delete(currentUser.id); else next.add(currentUser.id);
-                    return next;
-                  });
-                }}
+                onClick={() => void handleToggleContribution('ball')}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium transition-colors border ${ballContributors.has(currentUser.id) ? 'bg-green-100 text-green-700 border-green-300' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}
               >
                 ⚽ <span>{ballContributors.size}</span>
               </button>
               <button
-                onClick={() => {
-                  if (!currentUser) return;
-                  setSpeakerContributors((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(currentUser.id)) next.delete(currentUser.id); else next.add(currentUser.id);
-                    return next;
-                  });
-                }}
+                onClick={() => void handleToggleContribution('speaker')}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium transition-colors border ${speakerContributors.has(currentUser.id) ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-gray-50 text-gray-500 border-gray-200 hover:border-gray-300'}`}
               >
                 🔊 <span>{speakerContributors.size}</span>

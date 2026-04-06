@@ -34,6 +34,7 @@ function makeLobby(overrides: Partial<Lobby> = {}): Lobby {
     distanceKm: 1,
     waitlist: [],
     gameType: 'competitive',
+    genderRestriction: 'none',
     ...overrides,
   };
 }

@@ -1,6 +1,10 @@
 export type Language = 'he' | 'en';
 export type SkillLevel = 'beginner' | 'intermediate' | 'advanced' | 'mixed';
 export type GameType = 'friendly' | 'competitive';
+export type Gender = 'male' | 'female' | 'other';
+export type GenderRestriction = 'none' | 'male' | 'female';
+export type FieldType = 'grass' | 'asphalt' | 'indoor';
+export type ContributionType = 'ball' | 'speaker';
 
 export interface RatingEntry {
   date: string;
@@ -30,6 +34,7 @@ export interface Player {
   bio?: string;
   email?: string;
   photoUrl?: string;
+  gender?: Gender;
   ratingHistory: RatingEntry[];
   lobbyHistory: LobbyHistoryEntry[];
 }
@@ -53,6 +58,8 @@ export interface Lobby {
   distanceKm: number;
   waitlist: Player[];
   gameType: GameType;
+  fieldType?: FieldType;
+  genderRestriction: GenderRestriction;
 }
 
 export interface AuthUser {
@@ -67,6 +74,7 @@ export interface AuthUser {
   position?: string;
   bio?: string;
   photoUrl?: string;
+  gender?: Gender;
   ratingHistory: RatingEntry[];
   lobbyHistory: LobbyHistoryEntry[];
   friends: string[];

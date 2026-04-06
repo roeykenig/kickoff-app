@@ -306,6 +306,44 @@ using (
   and (storage.foldername(name))[1] = auth.uid()::text
 );
 
+-- Gender on profiles
+alter table public.profiles add column if not exists gender text check (gender in ('male', 'female', 'other'));
+
+-- Field type and gender restriction on lobbies
+alter table public.lobbies add column if not exists field_type text check (field_type in ('grass', 'asphalt', 'indoor'));
+alter table public.lobbies add column if not exists gender_restriction text not null default 'none' check (gender_restriction in ('none', 'male', 'female'));
+
+-- Contribution icons (ball/speaker) per lobby
+create table if not exists public.lobby_contributions (
+  lobby_id text not null references public.lobbies (id) on delete cascade,
+  profile_id text not null references public.profiles (id) on delete cascade,
+  type text not null check (type in ('ball', 'speaker')),
+  created_at timestamptz not null default now(),
+  primary key (lobby_id, profile_id, type)
+);
+
+alter table public.lobby_contributions enable row level security;
+
+create index if not exists lobby_contributions_lobby_id_idx on public.lobby_contributions (lobby_id);
+
+drop policy if exists "contributions readable by everyone" on public.lobby_contributions;
+create policy "contributions readable by everyone"
+on public.lobby_contributions
+for select
+using (true);
+
+drop policy if exists "authenticated users can manage their own contributions" on public.lobby_contributions;
+create policy "authenticated users can manage their own contributions"
+on public.lobby_contributions
+for all
+to authenticated
+using (
+  exists (select 1 from public.profiles p where p.id = profile_id and p.auth_user_id = auth.uid())
+)
+with check (
+  exists (select 1 from public.profiles p where p.id = profile_id and p.auth_user_id = auth.uid())
+);
+
 drop policy if exists "authenticated users can submit lobby ratings" on public.lobby_ratings;
 create policy "authenticated users can submit lobby ratings"
 on public.lobby_ratings
