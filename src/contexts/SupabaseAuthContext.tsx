@@ -3,6 +3,7 @@ import type { AuthUser, LobbyHistoryEntry, RatingEntry } from '../types';
 import { requireSupabase } from '../lib/supabase';
 import { uploadAvatar } from '../lib/storage';
 import { normalizeText, validateRegisterDraft } from '../lib/validation';
+import type { User } from '@supabase/supabase-js';
 
 type ProfileRow = {
   id: string;
@@ -72,10 +73,99 @@ function mapProfileToAuthUser(profile: ProfileRow, overrides?: Partial<AuthUser>
   };
 }
 
+function buildInitials(name: string) {
+  const parts = normalizeText(name).split(' ').filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }
+
+  return normalizeText(name).slice(0, 2).toUpperCase() || '?';
+}
+
+function buildFallbackName(email: string | undefined) {
+  const localPart = email?.split('@')[0] ?? 'Player';
+  const cleaned = localPart.replace(/[._-]+/g, ' ').trim();
+  return cleaned ? cleaned.replace(/\b\w/g, (char) => char.toUpperCase()) : 'Player';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = requireSupabase();
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [allUsers, setAllUsers] = useState<AuthUser[]>([]);
+
+  async function ensureProfileForAuthUser(
+    authUser: User,
+    overrides?: {
+      name?: string;
+      initials?: string;
+      avatarColor?: string;
+      position?: string;
+      bio?: string;
+      photoUrl?: string | null;
+    },
+  ) {
+    const { data: existingProfile, error: existingProfileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('auth_user_id', authUser.id)
+      .maybeSingle();
+
+    if (existingProfileError) {
+      throw existingProfileError;
+    }
+
+    if (existingProfile) {
+      return existingProfile.id as string;
+    }
+
+    const metadata = authUser.user_metadata ?? {};
+    const email = authUser.email?.trim().toLowerCase() ?? null;
+    const name = normalizeText(
+      overrides?.name ??
+        (typeof metadata.name === 'string' ? metadata.name : '') ??
+        buildFallbackName(authUser.email),
+    );
+    const initials =
+      overrides?.initials ??
+      (typeof metadata.initials === 'string' ? metadata.initials : '') ??
+      buildInitials(name);
+    const avatarColor =
+      overrides?.avatarColor ??
+      (typeof metadata.avatarColor === 'string' ? metadata.avatarColor : '') ??
+      'bg-blue-500';
+    const position =
+      overrides?.position ??
+      (typeof metadata.position === 'string' ? metadata.position : undefined);
+    const bio =
+      overrides?.bio ??
+      (typeof metadata.bio === 'string' ? metadata.bio : undefined);
+    const photoUrl =
+      overrides?.photoUrl ??
+      (typeof metadata.photoUrl === 'string' ? metadata.photoUrl : null);
+
+    const { error: insertProfileError } = await supabase.from('profiles').insert({
+      id: authUser.id,
+      auth_user_id: authUser.id,
+      email,
+      name,
+      initials,
+      avatar_color: avatarColor,
+      rating: 5,
+      games_played: 0,
+      position: position ? normalizeText(position) : null,
+      bio: bio ? normalizeText(bio) : null,
+      photo_url: photoUrl,
+      rating_history: [],
+      lobby_history: [],
+      is_mock: false,
+    });
+
+    if (insertProfileError) {
+      throw insertProfileError;
+    }
+
+    return authUser.id;
+  }
 
   async function refresh(authUserId: string | null) {
     const { data: profilesData, error: profilesError } = await supabase
@@ -97,7 +187,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const currentProfile = profiles.find((profile) => profile.auth_user_id === authUserId) ?? null;
     if (!currentProfile) {
-      setCurrentUser(null);
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user || authData.user.id !== authUserId) {
+        setCurrentUser(null);
+        return;
+      }
+
+      await ensureProfileForAuthUser(authData.user);
+      await refresh(authUserId);
       return;
     }
 
@@ -175,6 +272,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const { data } = await supabase.auth.getUser();
+    if (data.user) {
+      await ensureProfileForAuthUser(data.user);
+    }
     await refresh(data.user?.id ?? null);
     return null;
   };
@@ -195,9 +295,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: signUpData, error } = await supabase.auth.signUp({
       email: data.email.trim().toLowerCase(),
       password: data.password ?? '',
+      options: {
+        data: {
+          name: normalizeText(data.name),
+          initials: data.initials,
+          avatarColor: data.avatarColor,
+          position: data.position ? normalizeText(data.position) : null,
+          bio: data.bio ? normalizeText(data.bio) : null,
+        },
+      },
     });
 
     if (error) {
+      if (/already registered/i.test(error.message)) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: data.email.trim().toLowerCase(),
+          password: data.password ?? '',
+        });
+
+        if (signInError) {
+          return error.message;
+        }
+
+        const existingAuthUser = signInData.user;
+        if (!existingAuthUser) {
+          return 'Failed to recover existing account';
+        }
+
+        let recoveredPhotoUrl: string | null = null;
+        if (data.photoFile) {
+          try {
+            recoveredPhotoUrl = await uploadAvatar(data.photoFile, existingAuthUser.id);
+          } catch (uploadError) {
+            return uploadError instanceof Error ? uploadError.message : 'Failed to upload avatar';
+          }
+        }
+
+        await ensureProfileForAuthUser(existingAuthUser, {
+          name: normalizeText(data.name),
+          initials: data.initials,
+          avatarColor: data.avatarColor,
+          position: data.position,
+          bio: data.bio,
+          photoUrl: recoveredPhotoUrl,
+        });
+
+        await refresh(existingAuthUser.id);
+        return null;
+      }
+
       return error.message;
     }
 
@@ -216,25 +362,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: authUser.id,
-      auth_user_id: authUser.id,
-      email: data.email.trim().toLowerCase(),
-      name: normalizeText(data.name),
-      initials: data.initials,
-      avatar_color: data.avatarColor,
-      rating: 5,
-      games_played: 0,
-      position: data.position ? normalizeText(data.position) : null,
-      bio: data.bio ? normalizeText(data.bio) : null,
-      photo_url: photoUrl,
-      rating_history: [],
-      lobby_history: [],
-      is_mock: false,
-    });
-
-    if (profileError) {
-      return profileError.message;
+    try {
+      await ensureProfileForAuthUser(authUser, {
+        name: normalizeText(data.name),
+        initials: data.initials,
+        avatarColor: data.avatarColor,
+        position: data.position,
+        bio: data.bio,
+        photoUrl,
+      });
+    } catch (profileError) {
+      return profileError instanceof Error ? profileError.message : 'Failed to create profile';
     }
 
     await refresh(authUser.id);
