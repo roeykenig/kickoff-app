@@ -71,14 +71,16 @@ export default function EditProfilePage() {
     setSubmitting(true);
     setError('');
 
+    if (!currentUser) return;
+    const userId = currentUser.id;
     try {
       let photoUrl: string | null | undefined = undefined;
       if (photoFile) {
-        photoUrl = await uploadAvatar(photoFile, currentUser.id);
+        photoUrl = await uploadAvatar(photoFile, userId);
       }
 
       await updateProfile({
-        profileId: currentUser.id,
+        profileId: userId,
         name: form.name.trim(),
         position: form.position || undefined,
         bio: form.bio || undefined,
@@ -86,7 +88,7 @@ export default function EditProfilePage() {
         photoUrl,
       });
 
-      navigate(`/profile/${currentUser.id}`);
+      navigate(`/profile/${userId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update profile');
       setSubmitting(false);

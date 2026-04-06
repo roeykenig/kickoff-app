@@ -165,7 +165,7 @@ export const mockLobbies: Lobby[] = [
     maxPlayers: 10, numTeams: 2, playersPerTeam: 5,
     minRating: 5.0, isPrivate: false, price: 20,
     description: 'משחק שבועי קבוע! אנשים נחמדים. מגיעים 10 דק לפני.',
-    createdBy: 'p1', distanceKm: 1.2, waitlist: [], gameType: 'competitive', genderRestriction: 'none', genderRestriction: 'none',
+    createdBy: 'p1', distanceKm: 1.2, waitlist: [], gameType: 'competitive', genderRestriction: 'none',
   },
   {
     id: 'l2', title: 'חמישה על חמישה – חיפה',
