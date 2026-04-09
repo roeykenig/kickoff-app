@@ -8,6 +8,7 @@ import { deleteLobbyMembership, fetchContributions, fetchLobbyById, toggleContri
 import { getJoinLobbyError } from '../lib/validation';
 import type { ContributionType, Lobby } from '../types';
 import { formatDateTime } from '../utils/format';
+import { getDistanceSourceText, loadSessionDistancePreference } from '../utils/distanceSource';
 import { haversineKm } from '../utils/geo';
 import { formatLocationLabel } from '../utils/location';
 import LocationPreviewMap from '../components/LocationPreviewMap';
@@ -32,6 +33,7 @@ export default function LobbyDetailLive() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [contributions, setContributions] = useState<{ profileId: string; type: ContributionType }[]>([]);
+  const [distancePreference, setDistancePreference] = useState(() => loadSessionDistancePreference());
 
   async function loadLobby() {
     if (!id) {
@@ -59,6 +61,10 @@ export default function LobbyDetailLive() {
   useEffect(() => {
     void loadLobby();
   }, [id]);
+
+  useEffect(() => {
+    setDistancePreference(loadSessionDistancePreference());
+  }, []);
 
   if (!id) {
     return <Navigate to="/" replace />;
@@ -88,14 +94,19 @@ export default function LobbyDetailLive() {
   const isCompetitive = resolvedLobby.gameType === 'competitive';
   const isCreator = currentUser?.id === resolvedLobby.createdBy;
   const hasCoords = resolvedLobby.latitude != null && resolvedLobby.longitude != null;
+  const hasCurrentLocation =
+    distancePreference.locationMode === 'current' && distancePreference.currentCoords != null;
   const refPoint =
-    currentUser?.homeLatitude != null && currentUser?.homeLongitude != null
-      ? { lat: currentUser.homeLatitude, lng: currentUser.homeLongitude }
-      : null;
+    hasCurrentLocation
+      ? distancePreference.currentCoords
+      : currentUser?.homeLatitude != null && currentUser?.homeLongitude != null
+        ? { lat: currentUser.homeLatitude, lng: currentUser.homeLongitude }
+        : null;
   const distanceFromUserKm =
     refPoint && hasCoords
       ? haversineKm(refPoint.lat, refPoint.lng, resolvedLobby.latitude!, resolvedLobby.longitude!)
       : null;
+  const distanceSourceText = getDistanceSourceText(hasCurrentLocation ? 'current' : 'home', lang, 'full');
   const mapsUrl = hasCoords
     ? `https://www.google.com/maps/dir/?api=1&destination=${resolvedLobby.latitude},${resolvedLobby.longitude}`
     : `https://maps.google.com/?q=${encodeURIComponent(formatLocationLabel(resolvedLobby.address, resolvedLobby.city))}`;
@@ -229,6 +240,11 @@ export default function LobbyDetailLive() {
             {distanceFromUserKm != null && (
               <span className="text-gray-400 block text-xs mb-1">
                 {distanceFromUserKm.toFixed(1)} {t.common.km} {t.common.away}
+              </span>
+            )}
+            {distanceFromUserKm != null && (
+              <span className="text-gray-400 block text-[11px] mb-1">
+                {distanceSourceText}
               </span>
             )}
             <div className="flex gap-2 mt-1">

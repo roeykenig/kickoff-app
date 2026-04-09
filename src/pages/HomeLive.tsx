@@ -5,6 +5,7 @@ import { useLang } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/SupabaseAuthContext';
 import LobbyCard from '../components/LobbyCard';
 import { fetchLobbies } from '../lib/appData';
+import { Coords, HOME_FILTERS_SESSION_KEY, LocationMode, getDistanceSourceText } from '../utils/distanceSource';
 import { haversineKm } from '../utils/geo';
 import type { FieldType, GenderRestriction, GameType, Lobby } from '../types';
 
@@ -29,8 +30,6 @@ function isFuture(lobby: Lobby) {
 }
 
 // --- Session storage helpers ---
-const SS_KEY = 'kickoff_home_filters';
-
 type FilterState = {
   gameSearch: string;
   showFilters: boolean;
@@ -42,11 +41,13 @@ type FilterState = {
   canJoinOnly: boolean;
   radiusKm: RadiusOption;
   tab: Tab;
+  locationMode: LocationMode;
+  currentCoords: Coords | null;
 };
 
 function loadFilters(): FilterState {
   try {
-    const raw = sessionStorage.getItem(SS_KEY);
+    const raw = sessionStorage.getItem(HOME_FILTERS_SESSION_KEY);
     if (raw) return JSON.parse(raw) as FilterState;
   } catch {
     // ignore
@@ -62,12 +63,14 @@ function loadFilters(): FilterState {
     canJoinOnly: false,
     radiusKm: 999,
     tab: 'all',
+    locationMode: 'home',
+    currentCoords: null,
   };
 }
 
 function saveFilters(state: FilterState) {
   try {
-    sessionStorage.setItem(SS_KEY, JSON.stringify(state));
+    sessionStorage.setItem(HOME_FILTERS_SESSION_KEY, JSON.stringify(state));
   } catch {
     // ignore
   }
@@ -87,7 +90,7 @@ export default function HomeLive() {
 
   const {
     gameSearch, showFilters, gameTypeFilter, filterFieldType,
-    filterNumTeams, filterGender, minRating, canJoinOnly, radiusKm, tab,
+    filterNumTeams, filterGender, minRating, canJoinOnly, radiusKm, tab, locationMode, currentCoords,
   } = filters;
 
   function setFilter<K extends keyof FilterState>(key: K, value: FilterState[K]) {
@@ -113,8 +116,6 @@ export default function HomeLive() {
     saveFilters(reset);
   }
 
-  // Current location
-  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState('');
 
@@ -151,7 +152,7 @@ export default function HomeLive() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  function handleLocate() {
+  function requestCurrentLocation() {
     if (!navigator.geolocation) {
       setLocateError(lang === 'he' ? 'הדפדפן לא תומך במיקום' : 'Browser does not support geolocation');
       return;
@@ -160,21 +161,61 @@ export default function HomeLive() {
     setLocateError('');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setCurrentCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setFilters((prev) => {
+          const next = {
+            ...prev,
+            locationMode: 'current' as const,
+            currentCoords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
+          };
+          saveFilters(next);
+          return next;
+        });
         setLocating(false);
       },
       () => {
         setLocateError(lang === 'he' ? 'לא ניתן לקבל מיקום' : 'Could not get location');
         setLocating(false);
       },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000,
+      },
     );
   }
 
+  useEffect(() => {
+    if (locationMode === 'current') {
+      requestCurrentLocation();
+    }
+  }, []);
+
+  function handleLocate() {
+    requestCurrentLocation();
+  }
+
+  function handleUseHomeLocation() {
+    setFilters((prev) => {
+      const next = {
+        ...prev,
+        locationMode: 'home' as const,
+      };
+      saveFilters(next);
+      return next;
+    });
+    setLocateError('');
+  }
+
   // Reference point for distance: current location > home location > none
-  const refPoint = currentCoords
+  const hasHomeLocation = currentUser?.homeLatitude != null && currentUser?.homeLongitude != null;
+  const homeRefPoint = hasHomeLocation
+    ? { lat: currentUser!.homeLatitude!, lng: currentUser!.homeLongitude! }
+    : null;
+  const hasActiveCurrentLocation = locationMode === 'current' && currentCoords != null;
+  const refPoint = hasActiveCurrentLocation
     ? { lat: currentCoords.lat, lng: currentCoords.lng }
-    : currentUser?.homeLatitude != null && currentUser?.homeLongitude != null
-      ? { lat: currentUser.homeLatitude, lng: currentUser.homeLongitude }
+    : homeRefPoint
+      ? homeRefPoint
       : null;
 
   const futureLobbies = lobbies
@@ -203,6 +244,9 @@ export default function HomeLive() {
     canJoinOnly,
     radiusKm !== 999,
   ].filter(Boolean).length;
+  const activeDistanceMode = hasActiveCurrentLocation ? 'current' : 'home';
+  const distanceSourceText = getDistanceSourceText(activeDistanceMode, lang, 'short');
+  const distanceSourceSummary = getDistanceSourceText(activeDistanceMode, lang, 'full');
 
   const allFiltered = futureLobbies.filter((lobby) => {
     if (gameSearch.trim()) {
@@ -359,10 +403,21 @@ export default function HomeLive() {
                     : (lang === 'he' ? 'השתמש במיקום הנוכחי' : 'Use current location')}
                 </button>
               )}
-              {refPoint && currentCoords && (
-                <span className="text-xs text-green-600">📍 {lang === 'he' ? 'מיקום נוכחי' : 'Current location'}</span>
+              {refPoint && locationMode === 'current' && currentCoords && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-green-600">📍 {lang === 'he' ? 'מיקום נוכחי' : 'Current location'}</span>
+                  {hasHomeLocation && (
+                    <button
+                      type="button"
+                      onClick={handleUseHomeLocation}
+                      className="text-xs text-primary-600 hover:underline"
+                    >
+                      {lang === 'he' ? 'חזור למיקום הבית' : 'Switch back to home location'}
+                    </button>
+                  )}
+                </div>
               )}
-              {refPoint && !currentCoords && (
+              {refPoint && locationMode !== 'current' && (
                 <button
                   type="button"
                   onClick={handleLocate}
@@ -382,6 +437,9 @@ export default function HomeLive() {
               </p>
             )}
             {locateError && <p className="text-xs text-red-500 mb-1">{locateError}</p>}
+            {refPoint && (
+              <p className="text-xs text-gray-500 mb-2">{distanceSourceSummary}</p>
+            )}
             <div className="flex gap-1.5 flex-wrap">
               {RADIUS_OPTIONS.map(({ value, label, labelEn }) => (
                 <FilterChip
@@ -506,7 +564,7 @@ export default function HomeLive() {
       ) : displayed.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {displayed.map((lobby) => (
-            <LobbyCard key={lobby.id} lobby={lobby} />
+            <LobbyCard key={lobby.id} lobby={lobby} distanceNote={refPoint ? distanceSourceText : undefined} />
           ))}
         </div>
       ) : null}

@@ -9,6 +9,7 @@ import PlayerAvatarStack from './PlayerAvatarStack';
 
 interface Props {
   lobby: Lobby;
+  distanceNote?: string;
 }
 
 function avgRating(lobby: Lobby) {
@@ -17,7 +18,7 @@ function avgRating(lobby: Lobby) {
   return sum / lobby.players.length;
 }
 
-export default function LobbyCard({ lobby }: Props) {
+export default function LobbyCard({ lobby, distanceNote }: Props) {
   const navigate = useNavigate();
   const { t, lang } = useLang();
 
@@ -65,7 +66,12 @@ export default function LobbyCard({ lobby }: Props) {
         <div className="flex items-center gap-2">
           <MapPin size={14} className="text-gray-400 shrink-0" />
           <span className="truncate">{formatLocationLabel(lobby.address, lobby.city)}</span>
-          <span className="text-gray-400 shrink-0 ms-auto">{lobby.distanceKm} {t.common.km}</span>
+          <span className="shrink-0 ms-auto text-end">
+            <span className="block text-gray-400">{lobby.distanceKm} {t.common.km}</span>
+            {distanceNote && (
+              <span className="block text-[11px] text-gray-400">{distanceNote}</span>
+            )}
+          </span>
         </div>
         <div className="flex items-center gap-2">
           <Clock size={14} className="text-gray-400 shrink-0" />
