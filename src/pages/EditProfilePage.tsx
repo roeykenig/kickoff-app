@@ -6,7 +6,9 @@ import { useLang } from '../contexts/LanguageContext';
 import { updateProfile, updateHomeLocation } from '../lib/appData';
 import { uploadAvatar } from '../lib/storage';
 import type { Gender } from '../types';
-import PlacesAutocomplete, { type PlaceResult } from '../components/PlacesAutocomplete';
+import GooglePlacesAutocomplete, { type PlaceResult } from '../components/GooglePlacesAutocomplete';
+import SelectedPlaceNotice from '../components/SelectedPlaceNotice';
+import { formatLocationLabel } from '../utils/location';
 
 const POSITIONS_HE = ['חלוץ', 'קישור', 'בלם', 'שוער', 'אגף', 'כל עמדה'];
 const POSITIONS_EN = ['Striker', 'Midfielder', 'Defender', 'Goalkeeper', 'Winger', 'Any'];
@@ -40,7 +42,6 @@ export default function EditProfilePage() {
       // Pre-fill home address if already set
       if (currentUser.homeAddress) {
         setHomePlace({
-          displayText: currentUser.homeAddress,
           address: currentUser.homeAddress,
           city: '',
           latitude: currentUser.homeLatitude ?? 0,
@@ -189,12 +190,13 @@ export default function EditProfilePage() {
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
           <Field label={lang === 'he' ? 'כתובת הבית שלך (אופציונלי)' : 'Your home address (optional)'}>
-            <PlacesAutocomplete
-              value={homePlace?.displayText ?? ''}
+            <GooglePlacesAutocomplete
+              value={homePlace ? formatLocationLabel(homePlace.address, homePlace.city) : ''}
               onSelect={setHomePlace}
               onClear={() => setHomePlace(null)}
               placeholder={lang === 'he' ? 'חפש את הכתובת שלך...' : 'Search your address...'}
             />
+            {homePlace && <SelectedPlaceNotice place={homePlace} lang={lang} privacyNote />}
             <p className="text-xs text-gray-400 mt-1.5">
               {lang === 'he'
                 ? '🔒 כתובתך פרטית — משמשת רק לחישוב מרחק למשחקים'

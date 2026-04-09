@@ -22,10 +22,14 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+alter table public.profiles add column if not exists gender text check (gender in ('male', 'female', 'other'));
+alter table public.profiles add column if not exists home_latitude double precision;
+alter table public.profiles add column if not exists home_longitude double precision;
+alter table public.profiles add column if not exists home_address text;
+
 create table if not exists public.lobbies (
   id text primary key,
   title text not null,
-  field_name text not null,
   address text not null,
   city text not null,
   datetime timestamptz not null,
@@ -39,6 +43,10 @@ create table if not exists public.lobbies (
   created_by text not null references public.profiles (id) on delete restrict,
   distance_km numeric(5, 1) not null default 0,
   game_type text not null default 'friendly' check (game_type in ('friendly', 'competitive')),
+  field_type text check (field_type in ('grass', 'asphalt', 'indoor')),
+  gender_restriction text not null default 'none' check (gender_restriction in ('none', 'male', 'female')),
+  latitude double precision,
+  longitude double precision,
   created_at timestamptz not null default now()
 );
 
@@ -76,10 +84,8 @@ alter table public.profiles add constraint profiles_bio_length_check check (bio 
 
 alter table public.lobbies drop constraint if exists lobbies_title_length_check;
 alter table public.lobbies add constraint lobbies_title_length_check check (char_length(trim(title)) between 3 and 80);
-alter table public.lobbies drop constraint if exists lobbies_field_name_length_check;
-alter table public.lobbies add constraint lobbies_field_name_length_check check (char_length(trim(field_name)) between 2 and 80);
 alter table public.lobbies drop constraint if exists lobbies_address_length_check;
-alter table public.lobbies add constraint lobbies_address_length_check check (char_length(trim(address)) between 5 and 120);
+alter table public.lobbies add constraint lobbies_address_length_check check (char_length(trim(address)) between 2 and 160);
 alter table public.lobbies drop constraint if exists lobbies_city_length_check;
 alter table public.lobbies add constraint lobbies_city_length_check check (char_length(trim(city)) between 2 and 60);
 alter table public.lobbies drop constraint if exists lobbies_max_players_range_check;
@@ -306,12 +312,14 @@ using (
   and (storage.foldername(name))[1] = auth.uid()::text
 );
 
--- Gender on profiles
-alter table public.profiles add column if not exists gender text check (gender in ('male', 'female', 'other'));
-
--- Field type and gender restriction on lobbies
+-- Ensure newer location/profile columns exist on older databases too
+alter table public.profiles add column if not exists home_latitude double precision;
+alter table public.profiles add column if not exists home_longitude double precision;
+alter table public.profiles add column if not exists home_address text;
 alter table public.lobbies add column if not exists field_type text check (field_type in ('grass', 'asphalt', 'indoor'));
 alter table public.lobbies add column if not exists gender_restriction text not null default 'none' check (gender_restriction in ('none', 'male', 'female'));
+alter table public.lobbies add column if not exists latitude double precision;
+alter table public.lobbies add column if not exists longitude double precision;
 
 -- Contribution icons (ball/speaker) per lobby
 create table if not exists public.lobby_contributions (

@@ -2,6 +2,24 @@ import type { Lobby, Player, RatingEntry, LobbyHistoryEntry, GameType, FieldType
 import { requireSupabase } from './supabase';
 import { getJoinLobbyError, normalizeText, validateCreateLobbyPayload } from './validation';
 
+function toAppError(error: unknown, fallbackMessage: string) {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  if (error && typeof error === 'object') {
+    const maybeMessage = 'message' in error && typeof error.message === 'string' ? error.message : '';
+    const maybeDetails = 'details' in error && typeof error.details === 'string' ? error.details : '';
+    const maybeHint = 'hint' in error && typeof error.hint === 'string' ? error.hint : '';
+    const parts = [maybeMessage, maybeDetails, maybeHint].filter(Boolean);
+    if (parts.length > 0) {
+      return new Error(parts.join(' '));
+    }
+  }
+
+  return new Error(fallbackMessage);
+}
+
 type ProfileRow = {
   id: string;
   email: string | null;
@@ -21,7 +39,6 @@ type ProfileRow = {
 type LobbyRow = {
   id: string;
   title: string;
-  field_name: string;
   address: string;
   city: string;
   datetime: string;
@@ -134,7 +151,7 @@ export async function fetchLobbies(): Promise<Lobby[]> {
   const [{ data: lobbyRows, error: lobbiesError }, { data: profileRows, error: profilesError }, { data: membershipRows, error: membershipsError }] = await Promise.all([
     supabase
       .from('lobbies')
-      .select('id, title, field_name, address, city, datetime, max_players, num_teams, players_per_team, min_rating, is_private, price, description, created_by, distance_km, game_type, field_type, gender_restriction, latitude, longitude')
+      .select('id, title, address, city, datetime, max_players, num_teams, players_per_team, min_rating, is_private, price, description, created_by, distance_km, game_type, field_type, gender_restriction, latitude, longitude')
       .order('datetime', { ascending: true }),
     supabase
       .from('profiles')
@@ -178,7 +195,6 @@ export async function fetchLobbies(): Promise<Lobby[]> {
     return {
       id: row.id,
       title: row.title,
-      fieldName: row.field_name,
       address: row.address,
       city: row.city,
       datetime: row.datetime,
@@ -209,7 +225,6 @@ export async function fetchLobbyById(id: string): Promise<Lobby | null> {
 
 export type CreateLobbyInput = {
   title: string;
-  fieldName: string;
   address: string;
   city: string;
   datetime: string;
@@ -230,7 +245,6 @@ export type CreateLobbyInput = {
 export async function createLobby(input: CreateLobbyInput): Promise<string> {
   const draftErrors = validateCreateLobbyPayload({
     title: input.title,
-    fieldName: input.fieldName,
     address: input.address,
     city: input.city,
     datetime: input.datetime,
@@ -251,7 +265,6 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
   const { error: lobbyError } = await supabase.from('lobbies').insert({
     id,
     title: normalizeText(input.title),
-    field_name: normalizeText(input.fieldName),
     address: normalizeText(input.address),
     city: normalizeText(input.city),
     datetime: input.datetime,
@@ -272,7 +285,7 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
   });
 
   if (lobbyError) {
-    throw lobbyError;
+    throw toAppError(lobbyError, 'Failed to create game.');
   }
 
   const { error: membershipError } = await supabase.from('lobby_memberships').insert({
@@ -282,7 +295,7 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
   });
 
   if (membershipError) {
-    throw membershipError;
+    throw toAppError(membershipError, 'Failed to join the game after creating it.');
   }
 
   return id;
@@ -376,7 +389,6 @@ export async function submitLobbyRatings(input: LobbyRatingSubmission) {
 export type UpdateLobbyInput = {
   lobbyId: string;
   title: string;
-  fieldName: string;
   address: string;
   city: string;
   datetime: string;
@@ -388,6 +400,8 @@ export type UpdateLobbyInput = {
   gameType: GameType;
   fieldType?: FieldType;
   genderRestriction: GenderRestriction;
+  latitude?: number;
+  longitude?: number;
 };
 
 export async function updateLobby(input: UpdateLobbyInput) {
@@ -396,7 +410,6 @@ export async function updateLobby(input: UpdateLobbyInput) {
     .from('lobbies')
     .update({
       title: normalizeText(input.title),
-      field_name: normalizeText(input.fieldName),
       address: normalizeText(input.address),
       city: normalizeText(input.city),
       datetime: input.datetime,
@@ -409,6 +422,8 @@ export async function updateLobby(input: UpdateLobbyInput) {
       game_type: input.gameType,
       field_type: input.fieldType ?? null,
       gender_restriction: input.genderRestriction,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
     })
     .eq('id', input.lobbyId);
 
@@ -473,13 +488,6 @@ export async function fetchDistinctCities(): Promise<string[]> {
   const supabase = requireSupabase();
   const { data } = await supabase.from('lobbies').select('city');
   const values = [...new Set((data ?? []).map((row: { city: string }) => row.city).filter(Boolean))];
-  return values.sort();
-}
-
-export async function fetchDistinctFieldNames(): Promise<string[]> {
-  const supabase = requireSupabase();
-  const { data } = await supabase.from('lobbies').select('field_name');
-  const values = [...new Set((data ?? []).map((row: { field_name: string }) => row.field_name).filter(Boolean))];
   return values.sort();
 }
 

@@ -329,7 +329,7 @@ export default function ProfileLive() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{entry.lobbyTitle}</p>
-                  <p className="text-xs text-gray-400">{entry.fieldName} · {entry.city}</p>
+                  <p className="text-xs text-gray-400">{entry.city}</p>
                 </div>
                 <div className="text-end shrink-0">
                   <p className="text-xs text-gray-400">{new Date(entry.date).toLocaleDateString(lang === 'he' ? 'he-IL' : 'en-US')}</p>

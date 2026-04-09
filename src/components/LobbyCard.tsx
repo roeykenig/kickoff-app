@@ -3,6 +3,7 @@ import { MapPin, Clock, Users, Lock, Handshake, Trophy } from 'lucide-react';
 import { Lobby } from '../types';
 import { useLang } from '../contexts/LanguageContext';
 import { formatDateTime } from '../utils/format';
+import { formatLocationLabel } from '../utils/location';
 import { RatingBadge } from './RatingDisplay';
 import PlayerAvatarStack from './PlayerAvatarStack';
 
@@ -63,7 +64,7 @@ export default function LobbyCard({ lobby }: Props) {
       <div className="space-y-1.5 text-sm text-gray-600">
         <div className="flex items-center gap-2">
           <MapPin size={14} className="text-gray-400 shrink-0" />
-          <span className="truncate">{lobby.fieldName}</span>
+          <span className="truncate">{formatLocationLabel(lobby.address, lobby.city)}</span>
           <span className="text-gray-400 shrink-0 ms-auto">{lobby.distanceKm} {t.common.km}</span>
         </div>
         <div className="flex items-center gap-2">

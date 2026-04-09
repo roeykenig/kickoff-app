@@ -1,12 +1,13 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { createLobby, fetchDistinctFieldNames } from '../lib/appData';
+import { createLobby } from '../lib/appData';
 import { useAuth } from '../contexts/SupabaseAuthContext';
 import { useLang } from '../contexts/LanguageContext';
 import { buildLobbyDateTime, validateCreateLobbyDraft } from '../lib/validation';
 import type { GameType, FieldType, GenderRestriction } from '../types';
-import PlacesAutocomplete, { type PlaceResult } from '../components/PlacesAutocomplete';
-import AutocompleteInput from '../components/AutocompleteInput';
+import GooglePlacesAutocomplete, { type PlaceResult } from '../components/GooglePlacesAutocomplete';
+import SelectedPlaceNotice from '../components/SelectedPlaceNotice';
+import { formatLocationLabel } from '../utils/location';
 
 const TEAM_OPTIONS = [2, 3, 4];
 
@@ -19,7 +20,6 @@ export default function CreateLobbyPage() {
   const [genderRestriction, setGenderRestriction] = useState<GenderRestriction>('none');
   const [form, setForm] = useState({
     title: '',
-    fieldName: '',
     date: '',
     time: '',
     numTeams: 2,
@@ -30,14 +30,7 @@ export default function CreateLobbyPage() {
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [dbFieldNames, setDbFieldNames] = useState<string[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
-
-  useEffect(() => {
-    fetchDistinctFieldNames().then(setDbFieldNames).catch(() => {});
-  }, []);
-
-  const fieldNameOptions = dbFieldNames;
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
@@ -46,7 +39,7 @@ export default function CreateLobbyPage() {
   const currentUserId = currentUser.id;
   const maxPlayers = form.numTeams * form.playersPerTeam;
 
-  function setField(key: 'title' | 'fieldName' | 'date' | 'time' | 'minRating' | 'price' | 'description') {
+  function setField(key: 'title' | 'date' | 'time' | 'minRating' | 'price' | 'description') {
     return (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((prev) => ({ ...prev, [key]: event.target.value }));
     };
@@ -63,7 +56,6 @@ export default function CreateLobbyPage() {
     const city = selectedPlace?.city ?? '';
     const validationErrors = validateCreateLobbyDraft({
       title: form.title,
-      fieldName: form.fieldName,
       address,
       city,
       date: form.date,
@@ -91,7 +83,6 @@ export default function CreateLobbyPage() {
     try {
       const lobbyId = await createLobby({
         title: form.title,
-        fieldName: form.fieldName,
         address,
         city,
         datetime: datetime.toISOString(),
@@ -173,25 +164,17 @@ export default function CreateLobbyPage() {
         </Card>
 
         <Card>
-          <Field label={t.create.fieldName}>
-            <AutocompleteInput
-              placeholder={t.create.fieldNamePlaceholder}
-              value={form.fieldName}
-              onChange={(v) => setForm((prev) => ({ ...prev, fieldName: v }))}
-              options={fieldNameOptions}
-              required
-            />
-          </Field>
           <Field label={lang === 'he' ? 'מיקום המגרש' : 'Field location'}>
-            <PlacesAutocomplete
-              value={selectedPlace?.displayText ?? ''}
+            <GooglePlacesAutocomplete
+              value={selectedPlace ? formatLocationLabel(selectedPlace.address, selectedPlace.city) : ''}
               onSelect={(place) => setSelectedPlace(place)}
               onClear={() => setSelectedPlace(null)}
-              placeholder={lang === 'he' ? 'חפש כתובת או שם מקום...' : 'Search address or place name...'}
+              placeholder={lang === 'he' ? 'חפש כתובת או עיר...' : 'Search address or city...'}
               required
             />
+            {selectedPlace && <SelectedPlaceNotice place={selectedPlace} lang={lang} />}
             {selectedPlace && (
-              <p className="text-xs text-green-600 mt-1">
+              <p className="hidden">
                 ✓ {selectedPlace.city && `${selectedPlace.city} · `}{selectedPlace.latitude.toFixed(4)}, {selectedPlace.longitude.toFixed(4)}
               </p>
             )}

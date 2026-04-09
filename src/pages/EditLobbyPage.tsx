@@ -5,6 +5,9 @@ import { useLang } from '../contexts/LanguageContext';
 import { fetchLobbyById, updateLobby } from '../lib/appData';
 import { buildLobbyDateTime } from '../lib/validation';
 import type { FieldType, GameType, GenderRestriction, Lobby } from '../types';
+import GooglePlacesAutocomplete, { type PlaceResult } from '../components/GooglePlacesAutocomplete';
+import SelectedPlaceNotice from '../components/SelectedPlaceNotice';
+import { formatLocationLabel } from '../utils/location';
 
 const TEAM_OPTIONS = [2, 3, 4];
 
@@ -21,11 +24,9 @@ export default function EditLobbyPage() {
   const [gameType, setGameType] = useState<GameType>('friendly');
   const [fieldType, setFieldType] = useState<FieldType | ''>('');
   const [genderRestriction, setGenderRestriction] = useState<GenderRestriction>('none');
+  const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [form, setForm] = useState({
     title: '',
-    fieldName: '',
-    address: '',
-    city: '',
     date: '',
     time: '',
     numTeams: 2,
@@ -44,9 +45,6 @@ export default function EditLobbyPage() {
         const pad = (n: number) => String(n).padStart(2, '0');
         setForm({
           title: nextLobby.title,
-          fieldName: nextLobby.fieldName,
-          address: nextLobby.address,
-          city: nextLobby.city,
           date: `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`,
           time: `${pad(dt.getHours())}:${pad(dt.getMinutes())}`,
           numTeams: nextLobby.numTeams ?? 2,
@@ -58,6 +56,13 @@ export default function EditLobbyPage() {
         setGameType(nextLobby.gameType);
         setFieldType(nextLobby.fieldType ?? '');
         setGenderRestriction(nextLobby.genderRestriction);
+        setSelectedPlace({
+          address: nextLobby.address,
+          city: nextLobby.city,
+          latitude: nextLobby.latitude ?? 0,
+          longitude: nextLobby.longitude ?? 0,
+          placeId: '',
+        });
       }
       setLoading(false);
     });
@@ -92,13 +97,18 @@ export default function EditLobbyPage() {
       return;
     }
 
+    if (!selectedPlace) {
+      setError(lang === 'he' ? 'יש לבחור מיקום מהרשימה' : 'Please select a location from the list');
+      setSubmitting(false);
+      return;
+    }
+
     try {
       await updateLobby({
         lobbyId: id!,
         title: form.title,
-        fieldName: form.fieldName,
-        address: form.address,
-        city: form.city,
+        address: selectedPlace.address,
+        city: selectedPlace.city,
         datetime: datetime.toISOString(),
         numTeams: form.numTeams,
         playersPerTeam: form.playersPerTeam,
@@ -108,6 +118,8 @@ export default function EditLobbyPage() {
         gameType,
         fieldType: fieldType || undefined,
         genderRestriction,
+        latitude: selectedPlace.latitude,
+        longitude: selectedPlace.longitude,
       });
       navigate(`/lobby/${id}`);
     } catch (nextError) {
@@ -147,14 +159,15 @@ export default function EditLobbyPage() {
         </Card>
 
         <Card>
-          <Field label={t.create.fieldName}>
-            <Input value={form.fieldName} onChange={setField('fieldName')} required />
-          </Field>
-          <Field label={t.create.address}>
-            <Input value={form.address} onChange={setField('address')} required />
-          </Field>
-          <Field label={t.create.city}>
-            <Input value={form.city} onChange={setField('city')} required />
+          <Field label={lang === 'he' ? 'מיקום המגרש' : 'Field location'}>
+            <GooglePlacesAutocomplete
+              value={selectedPlace ? formatLocationLabel(selectedPlace.address, selectedPlace.city) : ''}
+              onSelect={setSelectedPlace}
+              onClear={() => setSelectedPlace(null)}
+              placeholder={lang === 'he' ? 'חפש כתובת או עיר...' : 'Search address or city...'}
+              required
+            />
+            {selectedPlace && <SelectedPlaceNotice place={selectedPlace} lang={lang} />}
           </Field>
         </Card>
 

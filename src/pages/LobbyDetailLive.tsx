@@ -8,6 +8,9 @@ import { deleteLobbyMembership, fetchContributions, fetchLobbyById, toggleContri
 import { getJoinLobbyError } from '../lib/validation';
 import type { ContributionType, Lobby } from '../types';
 import { formatDateTime } from '../utils/format';
+import { haversineKm } from '../utils/geo';
+import { formatLocationLabel } from '../utils/location';
+import LocationPreviewMap from '../components/LocationPreviewMap';
 
 type MyStatus = 'none' | 'joined' | 'waitlisted' | 'pending_confirm';
 
@@ -85,12 +88,20 @@ export default function LobbyDetailLive() {
   const isCompetitive = resolvedLobby.gameType === 'competitive';
   const isCreator = currentUser?.id === resolvedLobby.createdBy;
   const hasCoords = resolvedLobby.latitude != null && resolvedLobby.longitude != null;
+  const refPoint =
+    currentUser?.homeLatitude != null && currentUser?.homeLongitude != null
+      ? { lat: currentUser.homeLatitude, lng: currentUser.homeLongitude }
+      : null;
+  const distanceFromUserKm =
+    refPoint && hasCoords
+      ? haversineKm(refPoint.lat, refPoint.lng, resolvedLobby.latitude!, resolvedLobby.longitude!)
+      : null;
   const mapsUrl = hasCoords
     ? `https://www.google.com/maps/dir/?api=1&destination=${resolvedLobby.latitude},${resolvedLobby.longitude}`
-    : `https://maps.google.com/?q=${encodeURIComponent(`${resolvedLobby.address}, ${resolvedLobby.city}`)}`;
+    : `https://maps.google.com/?q=${encodeURIComponent(formatLocationLabel(resolvedLobby.address, resolvedLobby.city))}`;
   const wazeUrl = hasCoords
     ? `https://waze.com/ul?ll=${resolvedLobby.latitude},${resolvedLobby.longitude}&navigate=yes`
-    : `https://waze.com/ul?q=${encodeURIComponent(`${resolvedLobby.address}, ${resolvedLobby.city}`)}&navigate=yes`;
+    : `https://waze.com/ul?q=${encodeURIComponent(formatLocationLabel(resolvedLobby.address, resolvedLobby.city))}&navigate=yes`;
   const ballContributors = new Set(contributions.filter((c) => c.type === 'ball').map((c) => c.profileId));
   const speakerContributors = new Set(contributions.filter((c) => c.type === 'speaker').map((c) => c.profileId));
   const gameHasPassed = new Date(resolvedLobby.datetime) < new Date();
@@ -200,9 +211,7 @@ export default function LobbyDetailLive() {
                 {isCompetitive ? (lang === 'he' ? 'תחרותי' : 'Competitive') : (lang === 'he' ? 'ידידותי' : 'Friendly')}
               </span>
             </div>
-            <p className="text-gray-500">
-              {lobby.fieldName}, {lobby.city}
-            </p>
+            {lobby.city && <p className="text-gray-500">{lobby.city}</p>}
           </div>
           {avg !== null && isCompetitive && (
             <div className="text-end">
@@ -215,11 +224,13 @@ export default function LobbyDetailLive() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <InfoRow icon={<MapPin size={15} />} label={t.lobby.location}>
             <span>
-              {lobby.address}, {lobby.city}
+              {formatLocationLabel(lobby.address, lobby.city)}
             </span>
-            <span className="text-gray-400 block text-xs mb-1">
-              {lobby.distanceKm} {t.common.km} {t.common.away}
-            </span>
+            {distanceFromUserKm != null && (
+              <span className="text-gray-400 block text-xs mb-1">
+                {distanceFromUserKm.toFixed(1)} {t.common.km} {t.common.away}
+              </span>
+            )}
             <div className="flex gap-2 mt-1">
               <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors font-medium">
                 <ExternalLink size={11} />
@@ -278,13 +289,12 @@ export default function LobbyDetailLive() {
         )}
       </div>
 
-      <div className="bg-gray-100 rounded-2xl h-36 flex items-center justify-center mb-4 border border-gray-200">
-        <div className="text-center text-gray-400">
-          <MapPin size={24} className="mx-auto mb-1 text-gray-300" />
-          <p className="text-sm">{lobby.fieldName}</p>
-          <p className="text-xs">{lobby.address}</p>
-        </div>
-      </div>
+      {hasCoords && (
+        <LocationPreviewMap
+          latitude={resolvedLobby.latitude!}
+          longitude={resolvedLobby.longitude!}
+        />
+      )}
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4">
         <div className="flex items-center justify-between mb-4">

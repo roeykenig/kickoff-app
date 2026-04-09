@@ -20,7 +20,6 @@ function makeLobby(overrides: Partial<Lobby> = {}): Lobby {
   return {
     id: 'lobby-1',
     title: 'Evening Match',
-    fieldName: 'Gordon',
     address: '123 Test Street',
     city: 'Tel Aviv',
     datetime: '2099-06-01T18:00:00.000Z',
@@ -77,7 +76,6 @@ describe('validateCreateLobbyDraft', () => {
     const errors = validateCreateLobbyDraft(
       {
         title: 'Thursday Night',
-        fieldName: 'Gordon Field',
         address: '123 Gordon St',
         city: 'Tel Aviv',
         date: '2099-06-01',
@@ -94,11 +92,27 @@ describe('validateCreateLobbyDraft', () => {
     expect(errors).toEqual([]);
   });
 
+  it('accepts a locality-style address returned by place autocomplete', () => {
+    const errors = validateCreateLobbyDraft(
+      {
+        title: 'Thursday Night',
+        address: 'Shoham',
+        city: 'Shoham',
+        date: '2099-06-01',
+        time: '20:30',
+        numTeams: 2,
+        playersPerTeam: 5,
+      },
+      new Date('2099-05-01T00:00:00.000Z'),
+    );
+
+    expect(errors).toEqual([]);
+  });
+
   it('rejects invalid lobby draft data', () => {
     const errors = validateCreateLobbyDraft(
       {
         title: 'Hi',
-        fieldName: 'A',
         address: '123',
         city: 'T',
         date: '2020-01-01',
@@ -113,8 +127,7 @@ describe('validateCreateLobbyDraft', () => {
     );
 
     expect(errors).toContain('Game name must be between 3 and 80 characters.');
-    expect(errors).toContain('Field name must be between 2 and 80 characters.');
-    expect(errors).toContain('Address must be between 5 and 120 characters.');
+    expect(errors).toContain('Address must be between 2 and 160 characters.');
     expect(errors).toContain('City must be between 2 and 60 characters.');
     expect(errors).toContain('Game time must be in the future.');
     expect(errors).toContain('Number of teams must be between 2 and 4.');

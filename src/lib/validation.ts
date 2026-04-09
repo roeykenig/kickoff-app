@@ -14,7 +14,6 @@ export type RegisterDraft = {
 
 export type CreateLobbyDraft = {
   title: string;
-  fieldName: string;
   address: string;
   city: string;
   date: string;
@@ -28,7 +27,6 @@ export type CreateLobbyDraft = {
 
 export type CreateLobbyPayload = {
   title: string;
-  fieldName: string;
   address: string;
   city: string;
   datetime: string;
@@ -94,7 +92,6 @@ export function buildLobbyDateTime(date: string, time: string) {
 export function validateCreateLobbyDraft(input: CreateLobbyDraft, now = new Date()) {
   const errors: string[] = [];
   const title = normalizeText(input.title);
-  const fieldName = normalizeText(input.fieldName);
   const address = normalizeText(input.address);
   const city = normalizeText(input.city);
   const description = input.description ? normalizeText(input.description) : '';
@@ -105,12 +102,8 @@ export function validateCreateLobbyDraft(input: CreateLobbyDraft, now = new Date
     errors.push('Game name must be between 3 and 80 characters.');
   }
 
-  if (fieldName.length < 2 || fieldName.length > 80) {
-    errors.push('Field name must be between 2 and 80 characters.');
-  }
-
-  if (address.length < 5 || address.length > 120) {
-    errors.push('Address must be between 5 and 120 characters.');
+  if (address.length < 2 || address.length > 160) {
+    errors.push('Address must be between 2 and 160 characters.');
   }
 
   if (city.length < 2 || city.length > 60) {
@@ -153,7 +146,6 @@ export function validateCreateLobbyDraft(input: CreateLobbyDraft, now = new Date
 export function validateCreateLobbyPayload(input: CreateLobbyPayload, now = new Date()) {
   const errors: string[] = [];
   const title = normalizeText(input.title);
-  const fieldName = normalizeText(input.fieldName);
   const address = normalizeText(input.address);
   const city = normalizeText(input.city);
   const description = input.description ? normalizeText(input.description) : '';
@@ -164,12 +156,8 @@ export function validateCreateLobbyPayload(input: CreateLobbyPayload, now = new 
     errors.push('Game name must be between 3 and 80 characters.');
   }
 
-  if (fieldName.length < 2 || fieldName.length > 80) {
-    errors.push('Field name must be between 2 and 80 characters.');
-  }
-
-  if (address.length < 5 || address.length > 120) {
-    errors.push('Address must be between 5 and 120 characters.');
+  if (address.length < 2 || address.length > 160) {
+    errors.push('Address must be between 2 and 160 characters.');
   }
 
   if (city.length < 2 || city.length > 60) {

@@ -177,6 +177,16 @@ export default function HomeLive() {
       ? { lat: currentUser.homeLatitude, lng: currentUser.homeLongitude }
       : null;
 
+  const futureLobbies = lobbies
+    .filter(isFuture)
+    .map((lobby) => ({
+      ...lobby,
+      distanceKm:
+        refPoint && lobby.latitude != null && lobby.longitude != null
+          ? Number(haversineKm(refPoint.lat, refPoint.lng, lobby.latitude, lobby.longitude).toFixed(1))
+          : lobby.distanceKm,
+    }));
+
   const allUsers = getAllUsers();
   const friendSearchResults = friendSearch.trim().length >= 1
     ? allUsers
@@ -194,12 +204,10 @@ export default function HomeLive() {
     radiusKm !== 999,
   ].filter(Boolean).length;
 
-  const futureLobbies = lobbies.filter(isFuture);
-
   const allFiltered = futureLobbies.filter((lobby) => {
     if (gameSearch.trim()) {
       const q = gameSearch.trim().toLowerCase();
-      if (!`${lobby.title} ${lobby.city} ${lobby.fieldName}`.toLowerCase().includes(q)) return false;
+      if (!`${lobby.title} ${lobby.city} ${lobby.address}`.toLowerCase().includes(q)) return false;
     }
     if (gameTypeFilter !== 'all' && lobby.gameType !== gameTypeFilter) return false;
     if (filterFieldType !== 'all' && lobby.fieldType !== filterFieldType) return false;
@@ -237,7 +245,7 @@ export default function HomeLive() {
               type="text"
               value={gameSearch}
               onChange={(e) => setFilter('gameSearch', e.target.value)}
-              placeholder={lang === 'he' ? 'חפש משחק לפי שם, עיר, מגרש...' : 'Search games by name, city, field...'}
+              placeholder={lang === 'he' ? 'חפש משחק לפי שם, עיר, כתובת...' : 'Search games by name, city, address...'}
               className="w-full ps-9 pe-3 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent bg-white"
             />
             {gameSearch && (

@@ -19,7 +19,7 @@ export interface LobbyHistoryEntry {
   lobbyTitle: string;
   date: string;
   city: string;
-  fieldName: string;
+  fieldName?: string;
   ratingChange: number;
 }
 
@@ -42,7 +42,7 @@ export interface Player {
 export interface Lobby {
   id: string;
   title: string;
-  fieldName: string;
+  fieldName?: string;
   address: string;
   city: string;
   datetime: string;
