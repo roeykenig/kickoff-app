@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronLeft, Clock, MapPin, Minus, Pencil, TrendingDown, TrendingUp, UserCheck, UserPlus, UserX } from 'lucide-react';
+import { ChevronLeft, Clock, MapPin, Minus, Pencil, TrendingDown, TrendingUp, UserCheck, UserPlus, UserX, X } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import RatingDisplay from '../components/RatingDisplay';
 import { useLang } from '../contexts/LanguageContext';
@@ -13,6 +13,7 @@ export default function ProfileLive() {
   const { currentUser, getAllUsers, sendFriendRequest, acceptFriendRequest, declineFriendRequest, removeFriend } = useAuth();
   const [actionError, setActionError] = useState('');
   const [busyAction, setBusyAction] = useState('');
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
   const allUsers = getAllUsers();
   const profile = allUsers.find((user) => user.id === id) ?? null;
@@ -134,7 +135,13 @@ export default function ProfileLive() {
         <div className="flex items-start gap-5">
           <div className="shrink-0">
             {profile.photoUrl ? (
-              <img src={profile.photoUrl} alt={profile.name} className="w-20 h-20 rounded-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setLightboxPhoto(profile.photoUrl!)}
+                className="block cursor-zoom-in"
+              >
+                <img src={profile.photoUrl} alt={profile.name} className="w-20 h-20 rounded-full object-cover hover:opacity-90 transition-opacity" />
+              </button>
             ) : (
               <div className={`w-20 h-20 rounded-full ${profile.avatarColor} flex items-center justify-center text-white text-2xl font-bold`}>
                 {profile.initials}
@@ -334,6 +341,27 @@ export default function ProfileLive() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {lightboxPhoto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxPhoto(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxPhoto(null)}
+            className="absolute top-4 end-4 text-white bg-black/40 hover:bg-black/60 rounded-full p-2 transition-colors"
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={lightboxPhoto}
+            alt={profile.name}
+            className="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </main>

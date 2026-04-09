@@ -447,6 +447,20 @@ export async function toggleContribution(lobbyId: string, profileId: string, typ
   }
 }
 
+export async function fetchDistinctCities(): Promise<string[]> {
+  const supabase = requireSupabase();
+  const { data } = await supabase.from('lobbies').select('city');
+  const values = [...new Set((data ?? []).map((row: { city: string }) => row.city).filter(Boolean))];
+  return values.sort();
+}
+
+export async function fetchDistinctFieldNames(): Promise<string[]> {
+  const supabase = requireSupabase();
+  const { data } = await supabase.from('lobbies').select('field_name');
+  const values = [...new Set((data ?? []).map((row: { field_name: string }) => row.field_name).filter(Boolean))];
+  return values.sort();
+}
+
 export async function hasAlreadyRated(lobbyId: string, raterProfileId: string): Promise<boolean> {
   const supabase = requireSupabase();
   const { data, error } = await supabase

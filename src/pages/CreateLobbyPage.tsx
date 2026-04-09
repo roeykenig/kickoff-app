@@ -1,10 +1,12 @@
-import { useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { createLobby } from '../lib/appData';
+import { createLobby, fetchDistinctCities, fetchDistinctFieldNames } from '../lib/appData';
 import { useAuth } from '../contexts/SupabaseAuthContext';
 import { useLang } from '../contexts/LanguageContext';
 import { buildLobbyDateTime, validateCreateLobbyDraft } from '../lib/validation';
 import type { GameType, FieldType, GenderRestriction } from '../types';
+import AutocompleteInput from '../components/AutocompleteInput';
+import { ISRAELI_CITIES } from '../data/israeliCities';
 
 const TEAM_OPTIONS = [2, 3, 4];
 
@@ -30,6 +32,16 @@ export default function CreateLobbyPage() {
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [dbCities, setDbCities] = useState<string[]>([]);
+  const [dbFieldNames, setDbFieldNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchDistinctCities().then(setDbCities).catch(() => {});
+    fetchDistinctFieldNames().then(setDbFieldNames).catch(() => {});
+  }, []);
+
+  const cityOptions = [...new Set([...ISRAELI_CITIES, ...dbCities])].sort();
+  const fieldNameOptions = dbFieldNames;
 
   if (!currentUser) {
     return <Navigate to="/login" replace />;
@@ -156,13 +168,25 @@ export default function CreateLobbyPage() {
 
         <Card>
           <Field label={t.create.fieldName}>
-            <Input placeholder={t.create.fieldNamePlaceholder} value={form.fieldName} onChange={setField('fieldName')} required />
+            <AutocompleteInput
+              placeholder={t.create.fieldNamePlaceholder}
+              value={form.fieldName}
+              onChange={(v) => setForm((prev) => ({ ...prev, fieldName: v }))}
+              options={fieldNameOptions}
+              required
+            />
           </Field>
           <Field label={t.create.address}>
             <Input placeholder={t.create.addressPlaceholder} value={form.address} onChange={setField('address')} required />
           </Field>
           <Field label={t.create.city}>
-            <Input placeholder={t.create.cityPlaceholder} value={form.city} onChange={setField('city')} required />
+            <AutocompleteInput
+              placeholder={t.create.cityPlaceholder}
+              value={form.city}
+              onChange={(v) => setForm((prev) => ({ ...prev, city: v }))}
+              options={cityOptions}
+              required
+            />
           </Field>
         </Card>
 
