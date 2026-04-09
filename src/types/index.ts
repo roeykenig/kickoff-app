@@ -60,6 +60,8 @@ export interface Lobby {
   gameType: GameType;
   fieldType?: FieldType;
   genderRestriction: GenderRestriction;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface AuthUser {
@@ -80,4 +82,7 @@ export interface AuthUser {
   friends: string[];
   sentRequests: string[];
   pendingRequests: string[];
+  homeLatitude?: number;
+  homeLongitude?: number;
+  homeAddress?: string;
 }

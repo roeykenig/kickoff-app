@@ -1,12 +1,12 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { createLobby, fetchDistinctCities, fetchDistinctFieldNames } from '../lib/appData';
+import { createLobby, fetchDistinctFieldNames } from '../lib/appData';
 import { useAuth } from '../contexts/SupabaseAuthContext';
 import { useLang } from '../contexts/LanguageContext';
 import { buildLobbyDateTime, validateCreateLobbyDraft } from '../lib/validation';
 import type { GameType, FieldType, GenderRestriction } from '../types';
+import PlacesAutocomplete, { type PlaceResult } from '../components/PlacesAutocomplete';
 import AutocompleteInput from '../components/AutocompleteInput';
-import { ISRAELI_CITIES } from '../data/israeliCities';
 
 const TEAM_OPTIONS = [2, 3, 4];
 
@@ -20,8 +20,6 @@ export default function CreateLobbyPage() {
   const [form, setForm] = useState({
     title: '',
     fieldName: '',
-    address: '',
-    city: '',
     date: '',
     time: '',
     numTeams: 2,
@@ -32,15 +30,13 @@ export default function CreateLobbyPage() {
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [dbCities, setDbCities] = useState<string[]>([]);
   const [dbFieldNames, setDbFieldNames] = useState<string[]>([]);
+  const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
 
   useEffect(() => {
-    fetchDistinctCities().then(setDbCities).catch(() => {});
     fetchDistinctFieldNames().then(setDbFieldNames).catch(() => {});
   }, []);
 
-  const cityOptions = [...new Set([...ISRAELI_CITIES, ...dbCities])].sort();
   const fieldNameOptions = dbFieldNames;
 
   if (!currentUser) {
@@ -50,7 +46,7 @@ export default function CreateLobbyPage() {
   const currentUserId = currentUser.id;
   const maxPlayers = form.numTeams * form.playersPerTeam;
 
-  function setField(key: 'title' | 'fieldName' | 'address' | 'city' | 'date' | 'time' | 'minRating' | 'price' | 'description') {
+  function setField(key: 'title' | 'fieldName' | 'date' | 'time' | 'minRating' | 'price' | 'description') {
     return (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((prev) => ({ ...prev, [key]: event.target.value }));
     };
@@ -63,11 +59,13 @@ export default function CreateLobbyPage() {
 
     const numericPrice = form.price ? Number(form.price) : undefined;
     const minRating = gameType === 'competitive' ? Number(form.minRating) : undefined;
+    const address = selectedPlace?.address ?? '';
+    const city = selectedPlace?.city ?? '';
     const validationErrors = validateCreateLobbyDraft({
       title: form.title,
       fieldName: form.fieldName,
-      address: form.address,
-      city: form.city,
+      address,
+      city,
       date: form.date,
       time: form.time,
       numTeams: form.numTeams,
@@ -76,6 +74,12 @@ export default function CreateLobbyPage() {
       price: numericPrice,
       description: form.description,
     });
+
+    if (!selectedPlace) {
+      setError(lang === 'he' ? 'יש לבחור מיקום מהרשימה' : 'Please select a location from the list');
+      setSubmitting(false);
+      return;
+    }
 
     const datetime = buildLobbyDateTime(form.date, form.time);
     if (validationErrors.length > 0 || !datetime) {
@@ -88,8 +92,8 @@ export default function CreateLobbyPage() {
       const lobbyId = await createLobby({
         title: form.title,
         fieldName: form.fieldName,
-        address: form.address,
-        city: form.city,
+        address,
+        city,
         datetime: datetime.toISOString(),
         maxPlayers,
         numTeams: form.numTeams,
@@ -101,6 +105,8 @@ export default function CreateLobbyPage() {
         gameType,
         fieldType: fieldType || undefined,
         genderRestriction,
+        latitude: selectedPlace?.latitude,
+        longitude: selectedPlace?.longitude,
       });
 
       navigate(`/lobby/${lobbyId}`);
@@ -176,17 +182,19 @@ export default function CreateLobbyPage() {
               required
             />
           </Field>
-          <Field label={t.create.address}>
-            <Input placeholder={t.create.addressPlaceholder} value={form.address} onChange={setField('address')} required />
-          </Field>
-          <Field label={t.create.city}>
-            <AutocompleteInput
-              placeholder={t.create.cityPlaceholder}
-              value={form.city}
-              onChange={(v) => setForm((prev) => ({ ...prev, city: v }))}
-              options={cityOptions}
+          <Field label={lang === 'he' ? 'מיקום המגרש' : 'Field location'}>
+            <PlacesAutocomplete
+              value={selectedPlace?.displayText ?? ''}
+              onSelect={(place) => setSelectedPlace(place)}
+              onClear={() => setSelectedPlace(null)}
+              placeholder={lang === 'he' ? 'חפש כתובת או שם מקום...' : 'Search address or place name...'}
               required
             />
+            {selectedPlace && (
+              <p className="text-xs text-green-600 mt-1">
+                ✓ {selectedPlace.city && `${selectedPlace.city} · `}{selectedPlace.latitude.toFixed(4)}, {selectedPlace.longitude.toFixed(4)}
+              </p>
+            )}
           </Field>
         </Card>
 

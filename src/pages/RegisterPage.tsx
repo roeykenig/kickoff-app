@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/SupabaseAuthContext';
 import { useLang } from '../contexts/LanguageContext';
 import { validateRegisterDraft } from '../lib/validation';
 import type { Gender } from '../types';
+import PlacesAutocomplete, { type PlaceResult } from '../components/PlacesAutocomplete';
 
 const AVATAR_COLORS = [
   { value: 'bg-blue-500', label: 'Blue' },
@@ -39,6 +40,7 @@ export default function RegisterPage() {
   const [photoPreview, setPhotoPreview] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [homePlace, setHomePlace] = useState<PlaceResult | null>(null);
 
   if (currentUser) {
     return <Navigate to="/" replace />;
@@ -112,6 +114,9 @@ export default function RegisterPage() {
       bio: form.bio || undefined,
       gender: form.gender || undefined,
       photoFile: photoFile ?? undefined,
+      homeLatitude: homePlace?.latitude,
+      homeLongitude: homePlace?.longitude,
+      homeAddress: homePlace?.address,
     });
 
     if (nextError) {
@@ -258,6 +263,22 @@ export default function RegisterPage() {
               placeholder={lang === 'he' ? 'ספר קצת על עצמך...' : 'Tell us a bit about yourself...'}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-primary-300"
             />
+          </Field>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <Field label={lang === 'he' ? 'כתובת הבית שלך (אופציונלי)' : 'Your home address (optional)'}>
+            <PlacesAutocomplete
+              value={homePlace?.displayText ?? ''}
+              onSelect={setHomePlace}
+              onClear={() => setHomePlace(null)}
+              placeholder={lang === 'he' ? 'חפש את הכתובת שלך...' : 'Search your address...'}
+            />
+            <p className="text-xs text-gray-400 mt-1.5">
+              {lang === 'he'
+                ? '🔒 כתובתך פרטית לחלוטין — משמשת רק לחישוב מרחק למשחקים'
+                : '🔒 Your address is private — used only to calculate distance to games'}
+            </p>
           </Field>
         </div>
 

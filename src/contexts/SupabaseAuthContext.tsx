@@ -20,6 +20,9 @@ type ProfileRow = {
   gender: Gender | null;
   rating_history: RatingEntry[];
   lobby_history: LobbyHistoryEntry[];
+  home_latitude: number | null;
+  home_longitude: number | null;
+  home_address: string | null;
 };
 
 type FriendRequestRow = {
@@ -38,6 +41,9 @@ type RegisterInput = {
   bio?: string;
   gender?: Gender;
   photoFile?: File;
+  homeLatitude?: number;
+  homeLongitude?: number;
+  homeAddress?: string;
 };
 
 interface AuthContextType {
@@ -50,6 +56,7 @@ interface AuthContextType {
   acceptFriendRequest: (requesterId: string) => Promise<void>;
   declineFriendRequest: (requesterId: string) => Promise<void>;
   removeFriend: (friendId: string) => Promise<void>;
+  refreshCurrentUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -72,6 +79,9 @@ function mapProfileToAuthUser(profile: ProfileRow, overrides?: Partial<AuthUser>
     friends: [],
     sentRequests: [],
     pendingRequests: [],
+    homeLatitude: profile.home_latitude ?? undefined,
+    homeLongitude: profile.home_longitude ?? undefined,
+    homeAddress: profile.home_address ?? undefined,
     ...overrides,
   };
 }
@@ -106,6 +116,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       bio?: string;
       gender?: Gender;
       photoUrl?: string | null;
+      homeLatitude?: number;
+      homeLongitude?: number;
+      homeAddress?: string;
     },
   ) {
     const { data: existingProfile, error: existingProfileError } = await supabase
@@ -167,6 +180,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       rating_history: [],
       lobby_history: [],
       is_mock: false,
+      home_latitude: overrides?.homeLatitude ?? null,
+      home_longitude: overrides?.homeLongitude ?? null,
+      home_address: overrides?.homeAddress ?? null,
     });
 
     if (insertProfileError) {
@@ -179,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function refresh(authUserId: string | null) {
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
-      .select('id, auth_user_id, email, name, initials, avatar_color, rating, games_played, position, bio, photo_url, gender, rating_history, lobby_history')
+      .select('id, auth_user_id, email, name, initials, avatar_color, rating, games_played, position, bio, photo_url, gender, rating_history, lobby_history, home_latitude, home_longitude, home_address')
       .order('name', { ascending: true });
 
     if (profilesError) {
@@ -382,6 +398,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bio: data.bio,
         gender: data.gender,
         photoUrl,
+        homeLatitude: data.homeLatitude,
+        homeLongitude: data.homeLongitude,
+        homeAddress: data.homeAddress,
       });
     } catch (profileError) {
       return profileError instanceof Error ? profileError.message : 'Failed to create profile';
@@ -397,6 +416,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const getAllUsers = () => allUsers;
+
+  const refreshCurrentUser = async () => {
+    const { data } = await supabase.auth.getUser();
+    await refresh(data.user?.id ?? null);
+  };
 
   const sendFriendRequest = async (targetId: string) => {
     if (!currentUser) {
@@ -491,6 +515,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         acceptFriendRequest,
         declineFriendRequest,
         removeFriend,
+        refreshCurrentUser,
       }}
     >
       {children}

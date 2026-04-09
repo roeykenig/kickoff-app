@@ -37,6 +37,8 @@ type LobbyRow = {
   game_type: GameType;
   field_type: FieldType | null;
   gender_restriction: GenderRestriction;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 type MembershipRow = {
@@ -132,7 +134,7 @@ export async function fetchLobbies(): Promise<Lobby[]> {
   const [{ data: lobbyRows, error: lobbiesError }, { data: profileRows, error: profilesError }, { data: membershipRows, error: membershipsError }] = await Promise.all([
     supabase
       .from('lobbies')
-      .select('id, title, field_name, address, city, datetime, max_players, num_teams, players_per_team, min_rating, is_private, price, description, created_by, distance_km, game_type, field_type, gender_restriction')
+      .select('id, title, field_name, address, city, datetime, max_players, num_teams, players_per_team, min_rating, is_private, price, description, created_by, distance_km, game_type, field_type, gender_restriction, latitude, longitude')
       .order('datetime', { ascending: true }),
     supabase
       .from('profiles')
@@ -194,6 +196,8 @@ export async function fetchLobbies(): Promise<Lobby[]> {
       gameType: row.game_type ?? 'friendly',
       fieldType: row.field_type ?? undefined,
       genderRestriction: row.gender_restriction ?? 'none',
+      latitude: row.latitude ?? undefined,
+      longitude: row.longitude ?? undefined,
     };
   });
 }
@@ -219,6 +223,8 @@ export type CreateLobbyInput = {
   gameType: GameType;
   fieldType?: FieldType;
   genderRestriction?: GenderRestriction;
+  latitude?: number;
+  longitude?: number;
 };
 
 export async function createLobby(input: CreateLobbyInput): Promise<string> {
@@ -261,6 +267,8 @@ export async function createLobby(input: CreateLobbyInput): Promise<string> {
     game_type: input.gameType,
     field_type: input.fieldType ?? null,
     gender_restriction: input.genderRestriction ?? 'none',
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
   });
 
   if (lobbyError) {
@@ -445,6 +453,20 @@ export async function toggleContribution(lobbyId: string, profileId: string, typ
 
     if (error) throw error;
   }
+}
+
+export async function updateHomeLocation(
+  profileId: string,
+  homeLatitude: number | null,
+  homeLongitude: number | null,
+  homeAddress: string | null,
+) {
+  const supabase = requireSupabase();
+  const { error } = await supabase
+    .from('profiles')
+    .update({ home_latitude: homeLatitude, home_longitude: homeLongitude, home_address: homeAddress })
+    .eq('id', profileId);
+  if (error) throw error;
 }
 
 export async function fetchDistinctCities(): Promise<string[]> {

@@ -84,8 +84,13 @@ export default function LobbyDetailLive() {
   const avg = avgRating(resolvedLobby.players);
   const isCompetitive = resolvedLobby.gameType === 'competitive';
   const isCreator = currentUser?.id === resolvedLobby.createdBy;
-  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(`${resolvedLobby.address}, ${resolvedLobby.city}`)}`;
-  const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(`${resolvedLobby.address}, ${resolvedLobby.city}`)}&navigate=yes`;
+  const hasCoords = resolvedLobby.latitude != null && resolvedLobby.longitude != null;
+  const mapsUrl = hasCoords
+    ? `https://www.google.com/maps/dir/?api=1&destination=${resolvedLobby.latitude},${resolvedLobby.longitude}`
+    : `https://maps.google.com/?q=${encodeURIComponent(`${resolvedLobby.address}, ${resolvedLobby.city}`)}`;
+  const wazeUrl = hasCoords
+    ? `https://waze.com/ul?ll=${resolvedLobby.latitude},${resolvedLobby.longitude}&navigate=yes`
+    : `https://waze.com/ul?q=${encodeURIComponent(`${resolvedLobby.address}, ${resolvedLobby.city}`)}&navigate=yes`;
   const ballContributors = new Set(contributions.filter((c) => c.type === 'ball').map((c) => c.profileId));
   const speakerContributors = new Set(contributions.filter((c) => c.type === 'speaker').map((c) => c.profileId));
   const gameHasPassed = new Date(resolvedLobby.datetime) < new Date();

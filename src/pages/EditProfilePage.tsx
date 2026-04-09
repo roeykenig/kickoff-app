@@ -3,16 +3,17 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { Camera, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../contexts/SupabaseAuthContext';
 import { useLang } from '../contexts/LanguageContext';
-import { updateProfile } from '../lib/appData';
+import { updateProfile, updateHomeLocation } from '../lib/appData';
 import { uploadAvatar } from '../lib/storage';
 import type { Gender } from '../types';
+import PlacesAutocomplete, { type PlaceResult } from '../components/PlacesAutocomplete';
 
 const POSITIONS_HE = ['חלוץ', 'קישור', 'בלם', 'שוער', 'אגף', 'כל עמדה'];
 const POSITIONS_EN = ['Striker', 'Midfielder', 'Defender', 'Goalkeeper', 'Winger', 'Any'];
 
 export default function EditProfilePage() {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { currentUser, refreshCurrentUser } = useAuth();
   const { lang } = useLang();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -26,6 +27,7 @@ export default function EditProfilePage() {
   const [photoPreview, setPhotoPreview] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [homePlace, setHomePlace] = useState<PlaceResult | null>(null);
 
   useEffect(() => {
     if (currentUser) {
@@ -35,6 +37,17 @@ export default function EditProfilePage() {
         bio: currentUser.bio ?? '',
         gender: currentUser.gender ?? '',
       });
+      // Pre-fill home address if already set
+      if (currentUser.homeAddress) {
+        setHomePlace({
+          displayText: currentUser.homeAddress,
+          address: currentUser.homeAddress,
+          city: '',
+          latitude: currentUser.homeLatitude ?? 0,
+          longitude: currentUser.homeLongitude ?? 0,
+          placeId: '',
+        });
+      }
     }
   }, [currentUser]);
 
@@ -88,6 +101,14 @@ export default function EditProfilePage() {
         photoUrl,
       });
 
+      await updateHomeLocation(
+        userId,
+        homePlace?.latitude ?? null,
+        homePlace?.longitude ?? null,
+        homePlace?.address ?? null,
+      );
+
+      await refreshCurrentUser();
       navigate(`/profile/${userId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update profile');
@@ -163,6 +184,22 @@ export default function EditProfilePage() {
             <textarea rows={3} value={form.bio} onChange={setField('bio')}
               placeholder={lang === 'he' ? 'ספר קצת על עצמך...' : 'Tell us about yourself...'}
               className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-800 resize-none focus:outline-none focus:ring-2 focus:ring-primary-300" />
+          </Field>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <Field label={lang === 'he' ? 'כתובת הבית שלך (אופציונלי)' : 'Your home address (optional)'}>
+            <PlacesAutocomplete
+              value={homePlace?.displayText ?? ''}
+              onSelect={setHomePlace}
+              onClear={() => setHomePlace(null)}
+              placeholder={lang === 'he' ? 'חפש את הכתובת שלך...' : 'Search your address...'}
+            />
+            <p className="text-xs text-gray-400 mt-1.5">
+              {lang === 'he'
+                ? '🔒 כתובתך פרטית — משמשת רק לחישוב מרחק למשחקים'
+                : '🔒 Your address is private — used only to calculate distance to games'}
+            </p>
           </Field>
         </div>
 
