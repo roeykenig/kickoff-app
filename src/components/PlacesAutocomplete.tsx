@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
 import { MapPin, X } from 'lucide-react';
-
-const API_KEY = (import.meta as { env: Record<string, string> }).env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
 
 export type PlaceResult = {
   displayText: string;
@@ -21,76 +18,105 @@ type Props = {
   required?: boolean;
 };
 
-let initDone = false;
+const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-function initMaps() {
-  if (initDone || !API_KEY) return;
-  setOptions({ key: API_KEY, v: 'weekly', language: 'iw', region: 'IL' });
-  initDone = true;
+// Singleton — load the script once for the whole app lifetime
+let mapsLoadPromise: Promise<void> | null = null;
+
+function loadGoogleMaps(): Promise<void> {
+  if (!API_KEY) return Promise.reject(new Error('Missing VITE_GOOGLE_MAPS_API_KEY'));
+
+  // Already fully loaded
+  if (window.google?.maps?.places) return Promise.resolve();
+
+  // Already in progress
+  if (mapsLoadPromise) return mapsLoadPromise;
+
+  mapsLoadPromise = new Promise<void>((resolve, reject) => {
+    const cbName = `__gmcb_${Date.now()}`;
+    (window as unknown as Record<string, unknown>)[cbName] = () => {
+      delete (window as unknown as Record<string, unknown>)[cbName];
+      resolve();
+    };
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&libraries=places&language=iw&region=IL&callback=${cbName}`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => {
+      mapsLoadPromise = null;
+      reject(new Error('Failed to load Google Maps'));
+    };
+    document.head.appendChild(script);
+  });
+
+  return mapsLoadPromise;
 }
 
 export default function PlacesAutocomplete({ value, onSelect, onClear, placeholder, required }: Props) {
   const [inputValue, setInputValue] = useState(value);
   const [predictions, setPredictions] = useState<google.maps.places.AutocompletePrediction[]>([]);
   const [open, setOpen] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState('');
-  const serviceRef = useRef<google.maps.places.AutocompleteService | null>(null);
-  const detailsServiceRef = useRef<google.maps.places.PlacesService | null>(null);
-  const dummyDivRef = useRef<HTMLDivElement>(null);
+
+  const autocompleteRef = useRef<google.maps.places.AutocompleteService | null>(null);
+  const placesRef = useRef<google.maps.places.PlacesService | null>(null);
+  const dummyRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Sync external value changes (e.g., clear)
+  // Keep input in sync when parent clears the value
   useEffect(() => {
     setInputValue(value);
   }, [value]);
 
-  // Load Google Maps API
+  // Load Google Maps script on mount
   useEffect(() => {
     if (!API_KEY) return;
-    initMaps();
-    importLibrary('places')
+    loadGoogleMaps()
       .then(() => {
-        serviceRef.current = new google.maps.places.AutocompleteService();
-        setLoaded(true);
+        autocompleteRef.current = new google.maps.places.AutocompleteService();
+        if (dummyRef.current) {
+          placesRef.current = new google.maps.places.PlacesService(dummyRef.current);
+        }
+        setReady(true);
       })
-      .catch(() => setLoadError('שגיאה בטעינת Google Maps'));
+      .catch((err: unknown) => {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load maps');
+      });
   }, []);
 
-  // Init PlacesService (needs a DOM element)
+  // PlacesService needs a real DOM node — init once dummyRef is available
   useEffect(() => {
-    if (loaded && dummyDivRef.current && !detailsServiceRef.current) {
-      detailsServiceRef.current = new google.maps.places.PlacesService(dummyDivRef.current);
+    if (ready && dummyRef.current && !placesRef.current) {
+      placesRef.current = new google.maps.places.PlacesService(dummyRef.current);
     }
-  }, [loaded]);
+  }, [ready]);
 
   // Close dropdown on outside click
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
+    const handler = (e: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  function handleInputChange(text: string) {
-    setInputValue(text);
-    if (!text.trim()) {
+  function search(text: string) {
+    if (!ready || !autocompleteRef.current || !text.trim()) {
       setPredictions([]);
       setOpen(false);
       return;
     }
-    if (!loaded || !serviceRef.current) return;
-
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      serviceRef.current!.getPlacePredictions(
+      autocompleteRef.current!.getPlacePredictions(
         { input: text, componentRestrictions: { country: 'il' } },
         (results, status) => {
-          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results?.length) {
             setPredictions(results);
             setOpen(true);
           } else {
@@ -102,55 +128,47 @@ export default function PlacesAutocomplete({ value, onSelect, onClear, placehold
     }, 300);
   }
 
-  function handleSelect(prediction: google.maps.places.AutocompletePrediction) {
-    if (!detailsServiceRef.current) return;
-    setInputValue(prediction.description);
+  function selectPrediction(pred: google.maps.places.AutocompletePrediction) {
+    if (!placesRef.current) return;
+    setInputValue(pred.description);
     setOpen(false);
     setPredictions([]);
 
-    detailsServiceRef.current.getDetails(
-      { placeId: prediction.place_id, fields: ['formatted_address', 'geometry', 'address_components'] },
-      (result, status) => {
-        if (status !== google.maps.places.PlacesServiceStatus.OK || !result?.geometry?.location) return;
-
-        const lat = result.geometry.location.lat();
-        const lng = result.geometry.location.lng();
-        const cityComp = result.address_components?.find(
+    placesRef.current.getDetails(
+      { placeId: pred.place_id, fields: ['formatted_address', 'geometry', 'address_components'] },
+      (place, status) => {
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !place?.geometry?.location) return;
+        const cityComp = place.address_components?.find(
           (c) => c.types.includes('locality') || c.types.includes('administrative_area_level_2'),
         );
-        const city = cityComp?.long_name ?? '';
-
         onSelect({
-          displayText: prediction.description,
-          address: result.formatted_address ?? prediction.description,
-          city,
-          latitude: lat,
-          longitude: lng,
-          placeId: prediction.place_id,
+          displayText: pred.description,
+          address: place.formatted_address ?? pred.description,
+          city: cityComp?.long_name ?? '',
+          latitude: place.geometry.location.lat(),
+          longitude: place.geometry.location.lng(),
+          placeId: pred.place_id,
         });
       },
     );
   }
 
-  // Fallback if no API key configured
+  // No API key — show plain input with warning
   if (!API_KEY) {
     return (
       <div>
-        <div className="relative">
-          <MapPin size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            value={value}
-            onChange={(e) =>
-              onSelect({ displayText: e.target.value, address: e.target.value, city: '', latitude: 0, longitude: 0, placeId: '' })
-            }
-            placeholder={placeholder}
-            required={required}
-            className="w-full ps-9 pe-3 border border-amber-200 rounded-xl py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 bg-amber-50"
-          />
-        </div>
+        <input
+          type="text"
+          value={value}
+          onChange={(e) =>
+            onSelect({ displayText: e.target.value, address: e.target.value, city: '', latitude: 0, longitude: 0, placeId: '' })
+          }
+          placeholder={placeholder}
+          required={required}
+          className="w-full border border-amber-200 rounded-xl px-3 py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-300 bg-amber-50"
+        />
         <p className="text-xs text-amber-600 mt-1">
-          ⚠ הוסף <code className="bg-amber-100 px-1 rounded">VITE_GOOGLE_MAPS_API_KEY</code> ל-.env.local להפעלת חיפוש מיקום חכם
+          ⚠ הוסף <code className="bg-amber-100 px-1 rounded">VITE_GOOGLE_MAPS_API_KEY</code> ל-.env.local
         </p>
       </div>
     );
@@ -158,17 +176,26 @@ export default function PlacesAutocomplete({ value, onSelect, onClear, placehold
 
   return (
     <div ref={wrapperRef} className="relative">
-      <div ref={dummyDivRef} className="hidden" />
+      {/* PlacesService requires a DOM element — hidden div */}
+      <div ref={dummyRef} className="hidden" />
+
       <div className="relative">
         <MapPin size={15} className="absolute start-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
         <input
           type="text"
           value={inputValue}
-          onChange={(e) => handleInputChange(e.target.value)}
-          placeholder={placeholder}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            search(e.target.value);
+          }}
+          placeholder={
+            loadError ? '⚠ שגיאת טעינה' : ready ? placeholder : 'טוען מפות...'
+          }
           required={required}
           autoComplete="off"
-          className="w-full ps-9 pe-8 border border-gray-200 rounded-xl py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-transparent"
+          className={`w-full ps-9 pe-8 border rounded-xl py-2.5 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:border-transparent ${
+            loadError ? 'border-red-200 focus:ring-red-300 bg-red-50' : 'border-gray-200 focus:ring-primary-300'
+          }`}
         />
         {inputValue && (
           <button
@@ -193,13 +220,17 @@ export default function PlacesAutocomplete({ value, onSelect, onClear, placehold
           {predictions.map((pred) => (
             <li
               key={pred.place_id}
-              onMouseDown={() => handleSelect(pred)}
+              onMouseDown={() => selectPrediction(pred)}
               className="flex items-start gap-3 px-4 py-3 hover:bg-primary-50 cursor-pointer border-b border-gray-50 last:border-0 first:rounded-t-xl last:rounded-b-xl"
             >
-              <MapPin size={13} className="text-gray-400 mt-0.5 shrink-0" />
+              <MapPin size={13} className="text-primary-400 mt-0.5 shrink-0" />
               <div className="min-w-0">
-                <p className="text-sm text-gray-800 font-medium truncate">{pred.structured_formatting.main_text}</p>
-                <p className="text-xs text-gray-400 truncate">{pred.structured_formatting.secondary_text}</p>
+                <p className="text-sm text-gray-800 font-medium truncate">
+                  {pred.structured_formatting.main_text}
+                </p>
+                <p className="text-xs text-gray-400 truncate">
+                  {pred.structured_formatting.secondary_text}
+                </p>
               </div>
             </li>
           ))}
